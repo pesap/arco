@@ -1,170 +1,163 @@
-### arco
+> [!warning] `arco` is pretty new and it is not advised for production
+> environments. Use it at your own risk.
 
-> A performant, memory efficient optimization library for power system problems
->
-> [![Rust](https://img.shields.io/badge/rust-1.85-brightgreen)](https://www.rust-lang.org/)
-> [![Docs](https://img.shields.io/badge/docs-di%C3%A1taxis-green)](docs/diataxis.md)
-> [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-> [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
+<div align="center">
 
-Arco is an experimental workspace for linear and mixed-integer optimization. The
-primary user-facing API is the Python binding module `arco`, backed by Rust
-crates for model construction, solver integration, and diagnostics.
+<h1>ARCO</h1>
 
-> [!warning]
-> arco is pretty new and it is not advised for production environments
+<p><strong>A memory-smart optimization library for hard problems on constrained hardware.</strong></p>
 
-## Python API quickstart
+<p>
+  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/rust-1.85-brightgreen"></a>
+  <a href="docs/diataxis.md"><img alt="Docs" src="https://img.shields.io/badge/docs-di%C3%A1taxis-green"></a>
+  <a href="https://github.com/astral-sh/ruff"><img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
+  <a href="https://github.com/astral-sh/ty"><img alt="ty" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json"></a>
+</p>
 
-From the repository root:
+</div>
+
+Arco is an experimental framework that serves a narrow set of linear and
+mixed-integer optimization. The primary user-facing API is the Python binding
+module `arco`, backed by Rust crates for model construction, solver integration,
+and diagnostics.
+
+## Philosophy
+
+Arco is built for harder optimization problems on constrained resources. We are
+intentional about every allocation, careful with stack and heap behavior, and
+relentless about minimizing memory usage so more systems can run real workloads.
+The goal is not to trade speed for frugality, it is to keep performance at the
+max while staying memory disciplined.
+
+## At a Glance
+
+<table>
+<tr>
+<td valign="top" width="33%">
+
+<strong>What Arco Optimizes For</strong>
+
+<ul>
+  <li>LP/MIP workloads where memory pressure is a first-class constraint</li>
+  <li>Predictable memory behavior across stack and heap allocations</li>
+  <li>High throughput in model construction, orchestration, and solver handoff</li>
+</ul>
+
+</td>
+<td valign="top" width="33%">
+
+<strong>What Arco Is Not</strong>
+
+<ul>
+  <li>Not a general-purpose optimization framework</li>
+  <li>Not a symbolic math system for arbitrary modeling workflows</li>
+  <li>Not yet a production-hardened platform for critical infrastructure</li>
+</ul>
+
+</td>
+<td valign="top" width="33%">
+
+<strong>Current Maturity</strong>
+
+<ul>
+  <li>Experimental project with active iteration and evolving ergonomics</li>
+  <li>Best fit today for evaluation, prototyping, and focused production pilots</li>
+  <li>Readiness details are tracked in <a href="#features-and-status">Features and Status</a></li>
+</ul>
+
+</td>
+</tr>
+</table>
+
+## Quickstart
+
+Use `uv` to install and run Arco from Python.
 
 ```bash
-cd bindings/python
-uv sync --group dev
-uv run maturin develop
-uv run python examples/simple_lp.py
+uv add arco
+uv run python -c "import arco; print(arco.__name__)"
 ```
 
-Minimal example using the current API:
+## API comparison
+
+<a id="api-comparison"></a>
+
+<table>
+<tr>
+<th>With ARCO</th>
+<th>With Pyomo</th>
+</tr>
+<tr>
+<td>
 
 ```python
 import arco
 
 model = arco.Model()
 
-x = model.add_variable(bounds=arco.NonNegativeFloat, name="x")
-y = model.add_variable(bounds=arco.NonNegativeFloat, name="y")
+x = model.add_variable(lb=0, name="x")
+y = model.add_variable(lb=0, name="y")
 
-model.add_constraint(x + y >= 5.0, name="demand")
-model.minimize(3.0 * x + 2.0 * y, name="cost")
+model.add_constraint(x + y >= 5.0)
+model.minimize(3.0 * x + 2.0 * y)
 
 result = model.solve()
-print(result.status)
-print(result.objective_value)
-print(result.get_value(x), result.get_value(y))
+# x=0.0, y=5.0, objective=10.0
 ```
 
-Two-block `BlockModel` example (each block builds one model):
+</td>
+<td>
 
 ```python
-import arco
+import pyomo.environ as pyo
 
+model = pyo.ConcreteModel()
 
-def make_model(lower: float, upper: float) -> arco.Model:
-    model = arco.Model()
-    x = model.add_variable(bounds=arco.Bounds(lower=lower, upper=upper), is_integer=False)
-    model.minimize(expr=x)
-    return model
+model.x = pyo.Var(within=pyo.NonNegativeReals)
+model.y = pyo.Var(within=pyo.NonNegativeReals)
 
-
-def build_stage_one(ctx: arco.BlockContext) -> arco.Model:
-    return make_model(lower=4.0, upper=10.0)
-
-
-def extract_stage_one(solution: arco.Solution, _ctx: arco.BlockContext) -> dict[str, float]:
-    return {"cap": solution.get_primal(index=0)}
-
-
-def build_stage_two(ctx: arco.BlockContext) -> arco.Model:
-    return make_model(lower=0.0, upper=ctx.inputs["cap"])
-
-
-def extract_stage_two(solution: arco.Solution, _ctx: arco.BlockContext) -> dict[str, float]:
-    return {"value": solution.get_primal(index=0)}
-
-
-blocks = arco.BlockModel(name="two_stage")
-stage_one = blocks.add_block(
-    build_stage_one,
-    name="stage_one",
-    outputs={"cap": float},
-    extract=extract_stage_one,
+model.demand = pyo.Constraint(
+    expr=model.x + model.y >= 5.0
 )
-stage_two = blocks.add_block(
-    build_stage_two,
-    name="stage_two",
-    inputs_schema={"cap": float},
-    outputs={"value": float},
-    extract=extract_stage_two,
+model.cost = pyo.Objective(
+    expr=3.0 * model.x + 2.0 * model.y,
+    sense=pyo.minimize
 )
-blocks.link(source=stage_one.output("cap"), target=stage_two.input("cap"))
 
-runs = blocks.solve()
-for run in runs:
-    print(run.name, run.solution.status, run.outputs)
+solver = pyo.SolverFactory('highs')
+result = solver.solve(model)
 ```
 
-## Python API overview
+</td>
+</tr>
+</table>
 
-### Low-level API — single-model building and solving
+## Features and Roadmap
 
-Build one `Model`, add variables and constraints, set an objective, and solve.
+- **High Performance**: Rust core with zero-copy data structures for maximum
+  speed and minimal memory overhead.
+- **Python First**: Native Python bindings via PyO3 with intuitive operator
+  overloading for model construction.
+- **Solver Included**: HiGHS solver embedded out of the box. No external solver
+  installation or configuration required.
+- **Multi-Solver Support**: Pluggable solver backends including HiGHS (open
+  source) and FICO Xpress (commercial).
+- **Block Composition**: DAG-based orchestration for multi-stage optimization
+  problems with automatic dependency resolution.
+- **Memory Instrumentation**: Built-in diagnostics for tracking memory usage and
+  identifying bottlenecks.
 
-| Area            | Surface                                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Model lifecycle | `Model()` → add variables/constraints → `minimize()`/`maximize()` → `solve()`                                                                                            |
-| Variables       | `add_variable(bounds, ...)` returns a `Variable`; `add_variables(index_sets, bounds, ...)` returns a `VariableArray`. Bound constants `NonNegativeFloat`, `Binary`, etc. |
-| Expressions     | Operator overloading on `Variable` and `LinearExpr` (`3.0 * x + y`). Arithmetic on variables and scalars builds expressions directly                                     |
-| Constraints     | `add_constraint(expr)` accepts comparisons (`x + y <= 10`); `add_constraints(expr)` for arrays. `add_eq()`, `add_le()`, `add_ge()` accept a `LinearExpr` and scalar rhs  |
-| Objective       | `minimize(expr)` / `maximize(expr)`, or `set_objective(sense, terms)`                                                                                                    |
-| Solve           | `solve()` returns `SolveResult` with `status`, `objective_value`, `get_value`, `get_dual`, `get_reduced_cost`, `get_slack`                                               |
-| Solver backends | `HiGHS` (default) and `Xpress`. Pass `solver=arco.Xpress()` to `Model()` or `solve()`                                                                                    |
-| Inspection      | `inspect()` returns a `ModelSnapshot`; `export_csc()` / `export_crs()` for sparse matrix export                                                                          |
-| Slacks          | `add_slack()`, `add_slacks()`, `make_elastic()` for infeasibility diagnosis                                                                                              |
+| Feature                  | Status       | Feature                   | Status           |
+| :----------------------- | :----------- | :------------------------ | :--------------- |
+| **Model Construction**   | ✅ Available | **Block Orchestration**   | ✅ Available     |
+| **LP / MIP Solving**     | ✅ Available | **DAG Execution**         | ✅ Available     |
+| **HiGHS Backend**        | ✅ Available | **Warm Starting**         | ✅ Available     |
+| **Xpress Backend**       | ✅ Available | **Memory Diagnostics**    | ✅ Available     |
+| **Sparse Matrix Export** | ✅ Available | **Schema Validation**     | ✅ Available     |
+| **Slack Variables**      | ✅ Available | **Parallel Block Solve**  | 🚧 Under Testing |
+| **Dual / Reduced Costs** | ✅ Available | **Distributed Execution** | 📋 Planned       |
 
-### High-level API — multi-model block composition
+## Contributing
 
-Compose multiple independent models into a DAG where outputs of one block feed
-inputs of the next.
-
-| Area       | Surface                                                                                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BlockModel | `BlockModel(name=...)` is the orchestrator                                                                                                                                                          |
-| Blocks     | `add_block(build_fn, name=..., outputs=..., extract=...)` registers a callable that receives a `BlockContext` and returns a `Model`. The `extract` callable maps a `Solution` back to output values |
-| Linking    | `link(source=handle.output("key"), target=handle.input("key"))` wires block outputs to downstream inputs                                                                                            |
-| Solve      | `BlockModel.solve()` executes blocks in topological order and returns a list of `BlockRun` results                                                                                                  |
-| Transforms | `Transform.scale()`, `Transform.offset()`, `Transform.shift()`, etc. can be piped (`\|`) and applied to arrays between blocks                                                                       |
-| Context    | `BlockContext.inputs` provides upstream values; `BlockContext.attach(key, value)` stashes objects for extraction                                                                                    |
-
-## Rust usage
-
-The Rust workspace is organized around reusable crates:
-
-- `arco-core` for model construction and lifecycle logic.
-- `arco-highs` and `arco-xpress` for solver integrations.
-- `arco-tools` for diagnostics and memory instrumentation.
-- `arco-blocks` and `arco-blocks-core` for block-oriented composition.
-
-See `docs/how-to/rust-quickstart.md` and `docs/explanation/02-architecture.md`
-for Rust-first workflows.
-
-## Performance notes
-
-Performance and memory model details are documented in:
-
-- `docs/explanation/09-performance-model.md`
-- `scripts/model-bench`
-
-Use `just model-bench` to run benchmark scenarios.
-
-## Workspace layout
-
-- `crates/` contains Rust workspace members.
-- `bindings/python` contains the PyO3 extension and Python tests/examples.
-- `docs/` follows a Diataxis documentation layout.
-- `scripts/` contains benchmarking and tooling utilities.
-
-## Development commands
-
-- `just build` runs `cargo fmt`, `cargo clippy --all-targets --all-features`,
-  and `cargo build`.
-- `just test` runs Rust tests.
-- `cd bindings/python && uv run pytest tests` runs Python binding tests.
-- `cd bindings/python && uv run ruff check .` runs Python linting.
-- `cd bindings/python && uv run ty check .` runs Python type checks.
-
-## Documentation index
-
-- `docs/diataxis.md` is the documentation entrypoint.
-- `docs/rfd/README.md` contains architecture and design RFCs.
-- `CONTRIBUTING.md` describes contribution and review expectations.
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+development workflow, testing expectations, and documentation requirements.
