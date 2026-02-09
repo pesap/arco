@@ -76,15 +76,13 @@ py-build:
 
 [group("python")]
 [doc("Build dev extension then run Python tests")]
-[working-directory: "bindings/python"]
 py-test: py-dev
-    uv run pytest
+    uv run --project bindings/python --with pytest --with numpy pytest scripts/test_docs_doctest.py
 
 [group("python")]
 [doc("Build dev extension then run documentation doctests")]
-[working-directory: "bindings/python"]
 docs-test: py-dev
-    uv run pytest ../../scripts/test_docs_doctest.py -v
+    uv run --project bindings/python --with pytest --with numpy pytest scripts/test_docs_doctest.py -v
 
 [group("python")]
 [doc("Build dev extension then launch IPython")]

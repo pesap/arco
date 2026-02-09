@@ -69,19 +69,19 @@ full dump, call `model.pprint()`.
 True
 >>> "Subject to" in preview
 False
->>> "gen[0]" in preview
+>>> "gen[0,solar]" in preview
 True
->>> "gen[0] + gen[1] + gen[2] >= 120" in preview
+>>> "gen[0,solar] + gen[0,wind] + gen[0,gas] >= 120" in preview
 True
 >>> "Bounds:" in preview
 True
->>> "0 <= gen[5] <= 100" in preview
+>>> "0 <= gen[t,g] <= 100  for t in T, g in G" in preview
 True
 >>> buffer = io.StringIO()
 >>> with contextlib.redirect_stdout(buffer):
 ...     model.pprint()
 >>> full = buffer.getvalue()
->>> "gen[3] + gen[4] + gen[5] >= 90" in full
+>>> "gen[1,solar] + gen[1,wind] + gen[1,gas] >= 90" in full
 True
 ```
 
