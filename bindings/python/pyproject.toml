@@ -17,3 +17,8 @@ classifiers = [
 [tool.maturin]
 features = ["pyo3/extension-module"]
 include = ["arco.pyi"]
+
+[dependency-groups]
+dev = [
+    "ipython>=8.18.1",
+]

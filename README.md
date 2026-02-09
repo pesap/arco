@@ -157,6 +157,40 @@ result = solver.solve(model)
 | **Slack Variables**      | ✅ Available | **Parallel Block Solve**  | 🚧 Under Testing |
 | **Dual / Reduced Costs** | ✅ Available | **Distributed Execution** | 📋 Planned       |
 
+## Benchmarking
+
+Use the `arco-bench` CLI to run model benchmarks, inspect artifacts, and
+compare runs.
+
+```bash
+# Run default model-build scenarios
+cargo run -p arco-bench -- run
+
+# Run FAC-25 and model-build with custom cases and repetitions
+cargo run -p arco-bench -- run \
+  --scenario model-build,fac25 \
+  --cases 1000,10000 \
+  --repetitions 3
+
+# Summarize an artifact
+cargo run -p arco-bench -- report \
+  --input artifacts/bench/bench_<timestamp>.jsonl
+
+# Compare candidate against baseline and fail on regressions
+cargo run -p arco-bench -- compare \
+  --baseline artifacts/bench/baseline.jsonl \
+  --candidate artifacts/bench/candidate.jsonl \
+  --duration-threshold-pct 5 \
+  --memory-threshold-pct 5
+
+# Gate regressions across both total and variables stages
+just bench-gate artifacts/bench/baseline.jsonl artifacts/bench/candidate.jsonl 5 5
+```
+
+By default, `run` writes newline-delimited JSON records to
+`artifacts/bench/<run-id>.jsonl`. Use `--format table|json|ndjson` on `run`,
+`report`, and `compare` for terminal output control.
+
 ## Contributing
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the

@@ -40,6 +40,8 @@ Use targeted tests first, then broaden based on risk:
 - Prefer realistic unit and end-to-end coverage over mock-heavy tests.
 - When touching optimization plumbing, include cases that exercise memory
   behavior and hot paths.
+- For benchmark-sensitive changes, gate regressions against a baseline artifact:
+  `just bench-gate <baseline.jsonl> <candidate.jsonl> <duration_pct> <memory_pct>`.
 
 Suggested baseline command:
 
