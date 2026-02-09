@@ -6,7 +6,7 @@ use crate::slack::{SlackBound, SlackVariables};
 use crate::types::{Bounds, Sense};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use super::Model;
+use crate::model::Model;
 
 /// View of a variable in a model snapshot.
 #[derive(Debug, Clone)]

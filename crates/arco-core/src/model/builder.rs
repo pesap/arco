@@ -4,8 +4,8 @@ use crate::types::{Bounds, Constraint, Objective, Sense, Variable};
 use arco_expr::expr::{ComparisonSense, ConstraintExpr, Expr};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use super::Model;
-use super::error::ModelError;
+use crate::model::Model;
+use crate::model::error::ModelError;
 
 impl Model {
     /// Add a variable to the model.

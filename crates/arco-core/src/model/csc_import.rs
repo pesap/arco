@@ -3,8 +3,8 @@
 use crate::types::{Bounds, Constraint, SimplifyLevel, Variable};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use super::Model;
-use super::error::ModelError;
+use crate::model::Model;
+use crate::model::error::ModelError;
 
 /// Input data for building a model from CSC format.
 pub struct CscInput<'a> {

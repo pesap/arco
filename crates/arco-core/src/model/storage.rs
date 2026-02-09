@@ -3,8 +3,8 @@
 use crate::types::{Constraint, Variable};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use super::Model;
-use super::error::ModelError;
+use crate::model::Model;
+use crate::model::error::ModelError;
 
 impl Model {
     /// Get the number of variables
