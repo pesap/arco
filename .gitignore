@@ -555,4 +555,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# npm
+package*
+
 # End of https://www.toptal.com/developers/gitignore/api/c,vim,data,rust,venv,julia,linux,macos,python,windows,database,virtualenv,visualstudiocode,node
