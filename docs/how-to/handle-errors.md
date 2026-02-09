@@ -101,3 +101,7 @@ The table below lists the most common error classes. All inherit from
 > exceptions. They are returned as status values on `SolveResult`. Use
 > `solution.is_infeasible()`, `solution.status`, and related methods
 > to inspect the outcome after calling `model.solve()`.
+
+---
+
+[How-to Guides](./) | [Docs home](../)

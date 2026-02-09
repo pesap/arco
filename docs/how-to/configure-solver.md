@@ -116,3 +116,7 @@ This is equivalent to constructing an `arco.HiGHS(...)` and passing it via the
 > Xpress requires a commercial license. The API mirrors `arco.HiGHS(...)` --
 > pass the same settings and use `solver=arco.Xpress(threads=4)` in the solve
 > call.
+
+---
+
+[How-to Guides](./) | [Docs home](../)

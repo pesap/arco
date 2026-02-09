@@ -15,3 +15,7 @@ future release, once docstrings are added to the Rust source via PyO3.
 - `arco.SolveResult` — solution data returned by `Model.solve()`.
 - `arco.IndexSet` — named index sets for multi-dimensional variable arrays.
 - `arco.VariableArray` — multi-dimensional arrays of decision variables.
+
+---
+
+[Back to docs home](../)

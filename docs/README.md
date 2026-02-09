@@ -26,7 +26,7 @@ True
 > [!NOTE]
 > Arco embeds the HiGHS solver. No external solver installation is needed.
 
-## Tutorials
+## [Tutorials](tutorials/)
 
 Step-by-step walkthroughs that build your understanding from a simple LP to
 multi-stage block composition.
@@ -36,7 +36,7 @@ multi-stage block composition.
 - [Indexed Models](tutorials/indexed-models.md) -- use index sets and variable arrays for structured problems.
 - [Block Composition](tutorials/block-composition.md) -- compose multi-stage optimization workflows from reusable blocks.
 
-## How-to Guides
+## [How-to Guides](how-to/)
 
 Task-oriented recipes for common operations. Each guide gets straight to the
 point with self-contained examples you can copy and run.
@@ -49,7 +49,7 @@ point with self-contained examples you can copy and run.
 - [Handle Errors](how-to/handle-errors.md) -- catch model-building exceptions and check solver outcomes.
 - [Enable Logging](how-to/enable-logging.md) -- configure Rust-side tracing and solver output.
 
-## Explanation
+## [Explanation](explanation/)
 
 Background material and design decisions that help you understand why arco works
 the way it does.
@@ -58,6 +58,6 @@ the way it does.
 - [Architecture](explanation/architecture.md) -- how the Rust crates and Python bindings fit together.
 - [Core Concepts](explanation/core-concepts.md) -- variables, constraints, expressions, and the model lifecycle.
 
-## Reference
+## [Reference](reference/)
 
-- [API Reference](reference/index.md) -- type stubs, classes, and method signatures for the full Python API.
+- [API Reference](reference/) -- type stubs, classes, and method signatures for the full Python API.

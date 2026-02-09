@@ -174,5 +174,8 @@ SolutionStatus.OPTIMAL
 
 You now know how to create a model, define variables with bounds, add
 constraints using operator overloading, set an objective, solve the model, and
-read the results. The next tutorial, [Integer Programming](integer-programming.md),
-shows how to add integer and binary decision variables.
+read the results.
+
+---
+
+[Tutorials](./) | Next: [Integer Programming](integer-programming.md) &rarr;

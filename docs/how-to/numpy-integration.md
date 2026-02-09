@@ -255,3 +255,7 @@ reverses the column order. Both return `ExprArray` objects.
 
 These operations are useful for assignment and scheduling problems where
 diagonal or anti-diagonal constraints appear naturally.
+
+---
+
+[How-to Guides](./) | [Docs home](../)

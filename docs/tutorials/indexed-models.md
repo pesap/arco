@@ -144,3 +144,7 @@ so gas is never needed and the total cost is zero.
 > load data from dictionaries or dataframes and build the right-hand side
 > vectors programmatically. The index sets grow, the data gets richer, but the
 > code shape stays the same.
+
+---
+
+&larr; [Integer Programming](integer-programming.md) | [Tutorials](./) | Next: [Block Composition](block-composition.md) &rarr;

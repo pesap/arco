@@ -130,3 +130,7 @@ the direction of violation that minimizes total cost.
 > infeasibility. Add elasticity to a small group of suspect constraints first,
 > solve, and inspect which elastic variables are active before expanding the
 > search.
+
+---
+
+[How-to Guides](./) | [Docs home](../)

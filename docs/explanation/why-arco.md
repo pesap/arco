@@ -11,3 +11,7 @@ philosophy that guides its development.
 ## Comparison with existing tools
 
 (Planned.)
+
+---
+
+[Explanation](./) | [Docs home](../)

@@ -15,3 +15,7 @@ to the solver and back.
 ## Solver abstraction
 
 (Planned.)
+
+---
+
+[Explanation](./) | [Docs home](../)

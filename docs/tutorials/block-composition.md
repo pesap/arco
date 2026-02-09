@@ -189,5 +189,10 @@ and solve timing in milliseconds.
 ## Next steps
 
 You now know how to split a problem into blocks, connect them with typed ports,
-and solve the composed model. The [Building Optimization Models](../how-to/building-optimization-models.md)
-guide covers additional patterns for structuring your models.
+and solve the composed model. Head to the [How-to Guides](../how-to/) for
+task-oriented recipes, starting with
+[Building Optimization Models](../how-to/building-optimization-models.md).
+
+---
+
+&larr; [Indexed Models](indexed-models.md) | [Tutorials](./)

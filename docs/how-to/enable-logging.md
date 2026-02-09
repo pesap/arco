@@ -37,3 +37,7 @@ versions.
 >>> "highs" in str(info).lower() or len(info) > 0
 True
 ```
+
+---
+
+[How-to Guides](./) | [Docs home](../)

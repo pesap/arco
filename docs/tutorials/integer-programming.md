@@ -178,6 +178,8 @@ syntactic sugar -- the resulting model is identical.
 
 You now know how to create integer and binary variables, formulate a
 combinatorial problem, and use `BoundType` shortcuts to keep your model
-definitions concise. The next tutorial,
-[Indexed Models](indexed-models.md), shows how to use index sets and
-variable arrays for structured problems with many variables.
+definitions concise.
+
+---
+
+&larr; [Your First Model](your-first-model.md) | [Tutorials](./) | Next: [Indexed Models](indexed-models.md) &rarr;

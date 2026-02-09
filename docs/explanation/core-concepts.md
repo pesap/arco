@@ -15,3 +15,7 @@ underlying mathematical structures.
 ## The model lifecycle
 
 (Planned.)
+
+---
+
+[Explanation](./) | [Docs home](../)

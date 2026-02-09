@@ -246,3 +246,7 @@ Supply an initial feasible point via `primal_start` to give the solver a head st
 >>> solution.status
 SolutionStatus.OPTIMAL
 ```
+
+---
+
+[How-to Guides](./) | [Docs home](../)
