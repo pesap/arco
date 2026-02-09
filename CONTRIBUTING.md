@@ -6,16 +6,21 @@ latest `main` so manifests, docs, and active work stay aligned.
 
 ## Development workflow
 
-If workspace `just` targets are available, use them as the default contributor
-entry point. In the current setup, run the canonical Rust checks directly:
+Use workspace `just` targets as the default contributor entry point:
 
 ```bash
-cargo fmt
-cargo clippy --all-targets --all-features -- -D warnings
-cargo build
+just fmt
+just clippy
+just check
 ```
 
 Treat clippy and compiler warnings as errors and fix them immediately.
+
+For a full local gate before PR creation:
+
+```bash
+just ci
+```
 
 For Python commands, use `uv` consistently:
 
@@ -36,10 +41,10 @@ Use targeted tests first, then broaden based on risk:
 - When touching optimization plumbing, include cases that exercise memory
   behavior and hot paths.
 
-Suggested baseline commands:
+Suggested baseline command:
 
 ```bash
-cargo test
+just test
 ```
 
 And when Python tests are present:
