@@ -4,8 +4,8 @@ use crate::types::{Bounds, Constraint, Objective, Sense, Variable};
 use arco_expr::expr::{ComparisonSense, ConstraintExpr, Expr};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use crate::model::Model;
 use crate::model::error::ModelError;
+use crate::model::{ColumnData, Model};
 
 impl Model {
     /// Add a variable to the model.
@@ -20,19 +20,8 @@ impl Model {
         let id = VariableId::new(self.next_variable_id);
         self.next_variable_id += 1;
 
-        self.variables.insert(id, variable);
-        self.columns.insert(id, Vec::new());
+        self.push_variable(variable);
 
-        tracing::debug!(
-            component = "model",
-            operation = "add_variable",
-            status = "success",
-            var_id = id.inner(),
-            lower = variable.bounds.lower,
-            upper = variable.bounds.upper,
-            is_integer = variable.is_integer,
-            "Added variable to model"
-        );
         Ok(id)
     }
 
@@ -48,17 +37,8 @@ impl Model {
         let id = ConstraintId::new(self.next_constraint_id);
         self.next_constraint_id += 1;
 
-        self.constraints.insert(id, constraint);
+        self.constraints.push(constraint);
 
-        tracing::debug!(
-            component = "model",
-            operation = "add_constraint",
-            status = "success",
-            constraint_id = id.inner(),
-            lower = constraint.bounds.lower,
-            upper = constraint.bounds.upper,
-            "Added constraint to model"
-        );
         Ok(id)
     }
 
@@ -152,49 +132,40 @@ impl Model {
         self.ensure_variable_exists(var_id)?;
         self.ensure_constraint_exists(constraint_id)?;
 
-        // Update or insert in column-first storage
-        if let Some(column) = self.columns.get_mut(&var_id) {
-            if let Some(entry) = column.iter_mut().find(|(cid, _)| *cid == constraint_id) {
-                entry.1 = coefficient;
-            } else {
-                column.push((constraint_id, coefficient));
+        // Update or insert in column-first storage.
+        match self.columns.entry(var_id) {
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(ColumnData::Single((constraint_id, coefficient)));
+            }
+            std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                occupied.get_mut().upsert(constraint_id, coefficient);
             }
         }
 
-        tracing::trace!(
-            component = "model",
-            operation = "set_coefficient",
-            status = "success",
-            var_id = var_id.inner(),
-            constraint_id = constraint_id.inner(),
-            coefficient,
-            "Set coefficient"
-        );
         Ok(())
     }
 
     /// Check if a variable is active.
     pub fn is_variable_active(&self, id: VariableId) -> Result<bool, ModelError> {
-        Ok(self.get_variable(id)?.is_active)
+        self.variable_is_active_by_index(id.inner() as usize)
+            .ok_or(ModelError::InvalidVariableId(id))
     }
 
     /// Deactivate a variable without removing its column.
     pub fn deactivate_variable(&mut self, id: VariableId) -> Result<(), ModelError> {
-        let variable = self
-            .variables
-            .get_mut(&id)
-            .ok_or(ModelError::InvalidVariableId(id))?;
-        variable.is_active = false;
-        Ok(())
+        if self.set_variable_active_by_index(id.inner() as usize, false) {
+            Ok(())
+        } else {
+            Err(ModelError::InvalidVariableId(id))
+        }
     }
 
     /// Activate a previously deactivated variable.
     pub fn activate_variable(&mut self, id: VariableId) -> Result<(), ModelError> {
-        let variable = self
-            .variables
-            .get_mut(&id)
-            .ok_or(ModelError::InvalidVariableId(id))?;
-        variable.is_active = true;
-        Ok(())
+        if self.set_variable_active_by_index(id.inner() as usize, true) {
+            Ok(())
+        } else {
+            Err(ModelError::InvalidVariableId(id))
+        }
     }
 }

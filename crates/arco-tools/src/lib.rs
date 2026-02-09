@@ -5,4 +5,7 @@
 
 pub mod memory;
 
-pub use memory::{MemoryProbe, MemorySnapshot};
+pub use memory::{
+    MeasurementRecorder, MemoryProbe, MemorySnapshot, StageMeasurement, StageStart,
+    capture_rss_bytes, rss_delta,
+};

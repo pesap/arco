@@ -196,3 +196,43 @@ fn test_from_csc_rejects_bad_col_ptrs() {
     .expect_err("expected invalid CSC error");
     assert!(matches!(err, ModelError::InvalidCscData { .. }));
 }
+
+#[test]
+fn test_from_csc_only_stores_non_empty_columns() {
+    let model = Model::from_csc(
+        CscInput {
+            num_constraints: 2,
+            num_variables: 3,
+            col_ptrs: &[0, 0, 2, 2],
+            row_indices: &[0, 1],
+            values: &[1.0_f32, 2.0_f32],
+            var_lower: &[0.0_f32, 0.0_f32, 0.0_f32],
+            var_upper: &[1.0_f32, 1.0_f32, 1.0_f32],
+            con_lower: &[0.0_f32, 0.0_f32],
+            con_upper: &[1.0_f32, 1.0_f32],
+            is_integer: &[false, false, false],
+        },
+        SimplifyLevel::None,
+    )
+    .expect("model should build");
+
+    assert_eq!(model.columns.len(), 1);
+    assert!(
+        model
+            .get_column(VariableId::new(0))
+            .expect("missing column")
+            .is_empty()
+    );
+    assert_eq!(
+        model
+            .get_column(VariableId::new(1))
+            .expect("missing column"),
+        &vec![(ConstraintId::new(0), 1.0), (ConstraintId::new(1), 2.0)]
+    );
+    assert!(
+        model
+            .get_column(VariableId::new(2))
+            .expect("missing column")
+            .is_empty()
+    );
+}

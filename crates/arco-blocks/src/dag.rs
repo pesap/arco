@@ -98,13 +98,13 @@ mod tests {
     use super::*;
 
     fn blocks(names: &[&str]) -> Vec<String> {
-        names.iter().map(|s| s.to_string()).collect()
+        names.iter().copied().map(str::to_string).collect()
     }
 
     fn links(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         pairs
             .iter()
-            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .map(|(a, b)| ((*a).to_string(), (*b).to_string()))
             .collect()
     }
 

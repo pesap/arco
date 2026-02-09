@@ -1,6 +1,6 @@
 //! Model inspection and snapshot methods.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use crate::slack::{SlackBound, SlackVariables};
 use crate::types::{Bounds, Sense};
@@ -109,13 +109,12 @@ impl Model {
         let con_filter: Option<HashSet<ConstraintId>> =
             constraint_filter.map(|ids| ids.into_iter().collect());
 
-        let mut nnz_map: BTreeMap<ConstraintId, usize> =
-            self.constraints.keys().copied().map(|id| (id, 0)).collect();
+        let mut nnz_map: Vec<usize> = vec![0; self.num_constraints()];
         let mut coefficients: Vec<CoefficientView> = Vec::new();
 
-        for (var_id, coeffs) in &self.columns {
+        for (var_id, coeffs) in self.columns() {
             if let Some(filter) = var_filter.as_ref() {
-                if !filter.contains(var_id) {
+                if !filter.contains(&var_id) {
                     continue;
                 }
             }
@@ -125,12 +124,12 @@ impl Model {
                         continue;
                     }
                 }
-                if let Some(entry) = nnz_map.get_mut(constraint_id) {
+                if let Some(entry) = nnz_map.get_mut(constraint_id.inner() as usize) {
                     *entry += 1;
                 }
                 if include_coefficients {
                     coefficients.push(CoefficientView {
-                        variable_id: *var_id,
+                        variable_id: var_id,
                         constraint_id: *constraint_id,
                         value: *coeff,
                     });
@@ -141,39 +140,46 @@ impl Model {
         let variables = self
             .variables
             .iter()
+            .enumerate()
+            .map(|(idx, bounds)| (VariableId::new(idx as u32), bounds))
             .filter(|(id, _)| var_filter.as_ref().is_none_or(|filter| filter.contains(id)))
-            .map(|(id, var)| VariableView {
-                id: *id,
-                name: self
-                    .variable_names
-                    .as_ref()
-                    .and_then(|names| names.get(id).cloned()),
-                bounds: var.bounds,
-                is_integer: var.is_integer,
-                is_active: var.is_active,
-                metadata: self
-                    .variable_metadata
-                    .as_ref()
-                    .and_then(|meta| meta.get(id).cloned()),
+            .map(|(id, bounds)| {
+                let idx = id.inner() as usize;
+                VariableView {
+                    id,
+                    name: self
+                        .variable_names
+                        .as_ref()
+                        .and_then(|names| names.get(&id).cloned()),
+                    bounds: *bounds,
+                    is_integer: Self::read_packed_flag(&self.variable_is_integer_bits, idx),
+                    is_active: !Self::read_packed_flag(&self.variable_is_inactive_bits, idx),
+                    metadata: self
+                        .variable_metadata
+                        .as_ref()
+                        .and_then(|meta| meta.get(&id).cloned()),
+                }
             })
             .collect();
 
         let constraints = self
             .constraints
             .iter()
+            .enumerate()
+            .map(|(idx, constraint)| (ConstraintId::new(idx as u32), constraint))
             .filter(|(id, _)| con_filter.as_ref().is_none_or(|filter| filter.contains(id)))
             .map(|(id, constraint)| ConstraintView {
-                id: *id,
+                id,
                 name: self
                     .constraint_names
                     .as_ref()
-                    .and_then(|names| names.get(id).cloned()),
+                    .and_then(|names| names.get(&id).cloned()),
                 bounds: constraint.bounds,
-                nnz: *nnz_map.get(id).unwrap_or(&0),
+                nnz: *nnz_map.get(id.inner() as usize).unwrap_or(&0),
                 metadata: self
                     .constraint_metadata
                     .as_ref()
-                    .and_then(|meta| meta.get(id).cloned()),
+                    .and_then(|meta| meta.get(&id).cloned()),
             })
             .collect();
 

@@ -8,7 +8,7 @@ use arco_core::solver::SolverError as CoreSolverError;
 use arco_core::{Model, Sense};
 use arco_expr::{ConstraintId, VariableId};
 use arco_solver::{Solve, SolverConfig, SolverError as GenericSolverError};
-use arco_tools::memory::MemorySnapshot;
+use arco_tools::memory::capture_rss_bytes;
 use std::collections::BTreeMap;
 use std::time::Instant;
 use tracing::{debug, trace, warn};
@@ -491,7 +491,7 @@ fn solve_model(
     validate_model(model)?;
 
     let solver_version = crate::ffi::highs_version().unwrap_or_else(|| "unknown".to_string());
-    let rss_before = capture_rss("solve_start");
+    let rss_before = capture_rss_bytes("solve_start");
     let solve_started = Instant::now();
 
     debug!(
@@ -548,7 +548,7 @@ fn solve_model(
     // Solve
     let status = highs_model.solve();
     let solve_ms = solve_started.elapsed().as_secs_f64() * 1000.0;
-    let rss_after = capture_rss("solve_end");
+    let rss_after = capture_rss_bytes("solve_end");
     let rss_delta = match (rss_before, rss_after) {
         (Some(before), Some(after)) => Some(after as i64 - before as i64),
         _ => None,
@@ -691,12 +691,6 @@ fn default_primal_value(lower: f64, upper: f64) -> f64 {
     } else {
         0.0
     }
-}
-
-fn capture_rss(stage: &str) -> Option<u64> {
-    MemorySnapshot::capture(stage)
-        .ok()
-        .map(|snapshot| snapshot.rss_bytes)
 }
 
 #[cfg(test)]

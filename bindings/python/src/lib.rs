@@ -1139,7 +1139,7 @@ impl PyModel {
             let var_id = VariableId::new(i as u32);
             if let Ok(var) = self.inner.get_variable(var_id) {
                 let name = self.inner.get_variable_name(var_id).map(|s| s.to_string());
-                result.push(PyVariable::from_model_variable(i as u32, name, var));
+                result.push(PyVariable::from_model_variable(i as u32, name, &var));
             }
         }
         result
@@ -1213,7 +1213,7 @@ impl PyModel {
         Ok(PyVariable::from_model_variable(
             var_id.inner(),
             Some(name.to_string()),
-            var,
+            &var,
         ))
     }
 

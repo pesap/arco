@@ -90,7 +90,7 @@ impl PyVariableIterator {
         let var_id = VariableId::new(i as u32);
         let var = model.inner.get_variable(var_id).ok()?;
         let name = model.inner.get_variable_name(var_id).map(|s| s.to_string());
-        Some(PyVariable::from_model_variable(i as u32, name, var))
+        Some(PyVariable::from_model_variable(i as u32, name, &var))
     }
 
     fn __len__(&self) -> usize {

@@ -3,8 +3,8 @@
 use crate::types::{Bounds, Constraint, SimplifyLevel, Variable};
 use arco_expr::ids::{ConstraintId, VariableId};
 
-use crate::model::Model;
 use crate::model::error::ModelError;
+use crate::model::{ColumnData, Model};
 
 /// Input data for building a model from CSC format.
 pub struct CscInput<'a> {
@@ -75,7 +75,8 @@ impl Model {
             });
         }
 
-        let mut model = Model::with_simplify_level(simplify_level);
+        let mut model = Model::with_capacities(num_variables, num_constraints);
+        model.set_expr_simplify(simplify_level)?;
 
         for idx in 0..num_variables {
             let lower = var_lower[idx] as f64;
@@ -83,16 +84,11 @@ impl Model {
             if lower > upper {
                 return Err(ModelError::InvalidVariableBounds { lower, upper });
             }
-            let id = VariableId::new(idx as u32);
-            model.variables.insert(
-                id,
-                Variable {
-                    bounds: Bounds::new(lower, upper),
-                    is_integer: is_integer[idx],
-                    is_active: true,
-                },
-            );
-            model.columns.insert(id, Vec::new());
+            model.push_variable(Variable {
+                bounds: Bounds::new(lower, upper),
+                is_integer: is_integer[idx],
+                is_active: true,
+            });
         }
 
         for idx in 0..num_constraints {
@@ -101,13 +97,9 @@ impl Model {
             if lower > upper {
                 return Err(ModelError::InvalidConstraintBounds { lower, upper });
             }
-            let id = ConstraintId::new(idx as u32);
-            model.constraints.insert(
-                id,
-                Constraint {
-                    bounds: Bounds::new(lower, upper),
-                },
-            );
+            model.constraints.push(Constraint {
+                bounds: Bounds::new(lower, upper),
+            });
         }
 
         for col in 0..num_variables {
@@ -118,10 +110,10 @@ impl Model {
                     reason: format!("col_ptrs must be non-decreasing (col {col})"),
                 });
             }
-            let column = model
-                .columns
-                .get_mut(&VariableId::new(col as u32))
-                .ok_or(ModelError::InvalidVariableId(VariableId::new(col as u32)))?;
+            if start == end {
+                continue;
+            }
+            let mut column: Vec<(ConstraintId, f64)> = Vec::with_capacity(end - start);
             for idx in start..end {
                 let row = row_indices[idx];
                 if row >= num_constraints {
@@ -131,6 +123,10 @@ impl Model {
                 }
                 column.push((ConstraintId::new(row as u32), values[idx] as f64));
             }
+            model.columns.insert(
+                VariableId::new(col as u32),
+                ColumnData::from_entries(column),
+            );
         }
 
         model.next_variable_id = num_variables as u32;

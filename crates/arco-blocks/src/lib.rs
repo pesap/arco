@@ -7,7 +7,7 @@ mod once_map;
 use crate::dag::BlockDag;
 use crate::error::BlockError;
 use crate::once_map::OnceMap;
-use arco_tools::MemorySnapshot;
+use arco_tools::{capture_rss_bytes, rss_delta};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{
@@ -967,7 +967,7 @@ impl BlockModel {
                 let outputs = coerce_outputs(py, &block_ref, outputs)?;
                 let attachments = context_ref.attachments.clone_ref(py);
 
-                let rss_delta = match (rss_before, rss_after_solve) {
+                let rss_delta_total = match (rss_before, rss_after_solve) {
                     (Some(before), Some(after)) => Some(after as i64 - before as i64),
                     _ => None,
                 };
@@ -976,7 +976,7 @@ impl BlockModel {
                     build_ms,
                     solve_ms,
                     rss_bytes: rss_after_solve,
-                    rss_delta_bytes: rss_delta,
+                    rss_delta_bytes: rss_delta_total,
                 };
 
                 log_block_phase(
@@ -984,7 +984,7 @@ impl BlockModel {
                     "build",
                     build_ms,
                     rss_after_build,
-                    delta(rss_before, rss_after_build),
+                    rss_delta(rss_before, rss_after_build),
                     warm_start,
                 );
                 log_block_phase(
@@ -992,7 +992,7 @@ impl BlockModel {
                     "solve",
                     solve_ms,
                     rss_after_solve,
-                    delta(rss_after_build, rss_after_solve),
+                    rss_delta(rss_after_build, rss_after_solve),
                     warm_start,
                 );
 
@@ -1409,16 +1409,7 @@ fn is_sequence(value: &Bound<'_, PyAny>) -> bool {
 }
 
 fn rss_bytes() -> Option<u64> {
-    MemorySnapshot::capture("block")
-        .ok()
-        .map(|snap| snap.rss_bytes)
-}
-
-fn delta(before: Option<u64>, after: Option<u64>) -> Option<i64> {
-    match (before, after) {
-        (Some(before), Some(after)) => Some(after as i64 - before as i64),
-        _ => None,
-    }
+    capture_rss_bytes("block")
 }
 
 fn log_block_phase(

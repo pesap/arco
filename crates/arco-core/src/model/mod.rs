@@ -22,9 +22,9 @@ mod slack;
 mod storage;
 
 use crate::slack::SlackHandle;
-use crate::types::{Constraint, Objective, SimplifyLevel, Variable};
+use crate::types::{Bounds, Constraint, Objective, SimplifyLevel, Variable};
 use arco_expr::ids::{ConstraintId, VariableId};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Instant;
 
 pub use csc_import::CscInput;
@@ -40,13 +40,15 @@ pub use inspect::{
 /// The internal representation uses column-first sparse storage (CSC format).
 #[derive(Debug, Clone)]
 pub struct Model {
-    pub(crate) variables: BTreeMap<VariableId, Variable>,
-    pub(crate) constraints: BTreeMap<ConstraintId, Constraint>,
+    pub(crate) variables: Vec<Bounds>,
+    pub(crate) variable_is_integer_bits: Vec<u64>,
+    pub(crate) variable_is_inactive_bits: Vec<u64>,
+    pub(crate) constraints: Vec<Constraint>,
     pub(crate) objective: Objective,
     pub(crate) objective_name: Option<String>,
     simplify_level: SimplifyLevel,
     // Column-first sparse storage: variable_id -> vec of (constraint_id, coefficient)
-    pub(crate) columns: BTreeMap<VariableId, Vec<(ConstraintId, f64)>>,
+    pub(crate) columns: HashMap<VariableId, ColumnData>,
     pub(crate) next_variable_id: u32,
     pub(crate) next_constraint_id: u32,
     pub(crate) slack_handles: Vec<SlackHandle>,
@@ -57,16 +59,95 @@ pub struct Model {
     pub(crate) constraint_metadata: Option<BTreeMap<ConstraintId, serde_json::Value>>,
 }
 
+const BITS_PER_WORD: usize = u64::BITS as usize;
+
+#[derive(Debug, Clone)]
+pub(crate) enum ColumnData {
+    Single((ConstraintId, f64)),
+    Many(Vec<(ConstraintId, f64)>),
+}
+
+impl ColumnData {
+    #[inline]
+    fn from_entries(entries: Vec<(ConstraintId, f64)>) -> Self {
+        if entries.len() == 1 {
+            ColumnData::Single(entries[0])
+        } else {
+            ColumnData::Many(entries)
+        }
+    }
+
+    #[inline]
+    fn upsert(&mut self, constraint_id: ConstraintId, coefficient: f64) {
+        match self {
+            ColumnData::Single((existing_id, existing_coeff)) => {
+                if *existing_id == constraint_id {
+                    *existing_coeff = coefficient;
+                } else {
+                    let previous = (*existing_id, *existing_coeff);
+                    *self = ColumnData::Many(vec![previous, (constraint_id, coefficient)]);
+                }
+            }
+            ColumnData::Many(entries) => {
+                if let Some(entry) = entries.iter_mut().find(|(cid, _)| *cid == constraint_id) {
+                    entry.1 = coefficient;
+                } else {
+                    entries.push((constraint_id, coefficient));
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        match self {
+            ColumnData::Single(_) => 1,
+            ColumnData::Many(entries) => entries.len(),
+        }
+    }
+
+    #[inline]
+    fn as_slice(&self) -> &[(ConstraintId, f64)] {
+        match self {
+            ColumnData::Single(entry) => std::slice::from_ref(entry),
+            ColumnData::Many(entries) => entries.as_slice(),
+        }
+    }
+}
+
 impl Model {
     /// Create a new empty model.
     pub fn new() -> Self {
         Self {
-            variables: BTreeMap::new(),
-            constraints: BTreeMap::new(),
+            variables: Vec::new(),
+            variable_is_integer_bits: Vec::new(),
+            variable_is_inactive_bits: Vec::new(),
+            constraints: Vec::new(),
             objective: Objective::new(),
             objective_name: None,
             simplify_level: SimplifyLevel::default(),
-            columns: BTreeMap::new(),
+            columns: HashMap::new(),
+            next_variable_id: 0,
+            next_constraint_id: 0,
+            slack_handles: Vec::new(),
+            variable_names: None,
+            constraint_names: None,
+            variable_metadata: None,
+            constraint_metadata: None,
+        }
+    }
+
+    /// Create a new model with pre-allocated storage capacities.
+    pub fn with_capacities(variable_capacity: usize, constraint_capacity: usize) -> Self {
+        Self {
+            variables: Vec::with_capacity(variable_capacity),
+            variable_is_integer_bits: Vec::with_capacity(variable_capacity.div_ceil(BITS_PER_WORD)),
+            variable_is_inactive_bits: Vec::new(),
+            constraints: Vec::with_capacity(constraint_capacity),
+            objective: Objective::new(),
+            objective_name: None,
+            simplify_level: SimplifyLevel::default(),
+            columns: HashMap::new(),
             next_variable_id: 0,
             next_constraint_id: 0,
             slack_handles: Vec::new(),
@@ -108,8 +189,73 @@ impl Model {
         &self.objective
     }
 
+    #[inline]
+    pub(crate) fn push_variable(&mut self, variable: Variable) {
+        let idx = self.variables.len();
+        self.variables.push(variable.bounds);
+        if variable.is_integer {
+            Self::write_packed_flag(&mut self.variable_is_integer_bits, idx, true);
+        }
+        if !variable.is_active {
+            Self::write_packed_flag(&mut self.variable_is_inactive_bits, idx, true);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn get_variable_by_index(&self, idx: usize) -> Option<Variable> {
+        let bounds = *self.variables.get(idx)?;
+        Some(Variable {
+            bounds,
+            is_integer: Self::read_packed_flag(&self.variable_is_integer_bits, idx),
+            is_active: !Self::read_packed_flag(&self.variable_is_inactive_bits, idx),
+        })
+    }
+
+    #[inline]
+    pub(crate) fn set_variable_active_by_index(&mut self, idx: usize, active: bool) -> bool {
+        if idx >= self.variables.len() {
+            return false;
+        }
+        Self::write_packed_flag(&mut self.variable_is_inactive_bits, idx, !active);
+        true
+    }
+
+    #[inline]
+    pub(crate) fn variable_is_active_by_index(&self, idx: usize) -> Option<bool> {
+        if idx >= self.variables.len() {
+            return None;
+        }
+        Some(!Self::read_packed_flag(
+            &self.variable_is_inactive_bits,
+            idx,
+        ))
+    }
+
+    #[inline]
+    fn read_packed_flag(bits: &[u64], idx: usize) -> bool {
+        let word = idx / BITS_PER_WORD;
+        let bit = idx % BITS_PER_WORD;
+        bits.get(word)
+            .is_some_and(|entry| (entry & (1_u64 << bit)) != 0)
+    }
+
+    #[inline]
+    fn write_packed_flag(bits: &mut Vec<u64>, idx: usize, value: bool) {
+        let word = idx / BITS_PER_WORD;
+        let bit = idx % BITS_PER_WORD;
+        let mask = 1_u64 << bit;
+        if value {
+            if bits.len() <= word {
+                bits.resize(word + 1, 0);
+            }
+            bits[word] |= mask;
+        } else if bits.len() > word {
+            bits[word] &= !mask;
+        }
+    }
+
     pub(crate) fn ensure_variable_exists(&self, id: VariableId) -> Result<(), ModelError> {
-        if self.variables.contains_key(&id) {
+        if (id.inner() as usize) < self.variables.len() {
             Ok(())
         } else {
             Err(ModelError::InvalidVariableId(id))
@@ -117,7 +263,7 @@ impl Model {
     }
 
     pub(crate) fn ensure_constraint_exists(&self, id: ConstraintId) -> Result<(), ModelError> {
-        if self.constraints.contains_key(&id) {
+        if (id.inner() as usize) < self.constraints.len() {
             Ok(())
         } else {
             Err(ModelError::InvalidConstraintId(id))
@@ -222,7 +368,57 @@ mod tests {
 
         let id = model.add_variable(var).unwrap();
         assert_eq!(model.num_variables(), 1);
-        assert_eq!(model.get_variable(id).unwrap(), &var);
+        assert_eq!(model.get_variable(id).unwrap(), var);
+    }
+
+    #[test]
+    fn test_model_with_capacities() {
+        let model = Model::with_capacities(32, 16);
+        assert_eq!(model.num_variables(), 0);
+        assert_eq!(model.num_constraints(), 0);
+        assert!(model.variables.capacity() >= 32);
+        assert!(model.constraints.capacity() >= 16);
+    }
+
+    #[test]
+    fn test_variable_flags_are_packed() {
+        let mut model = Model::new();
+        for idx in 0..130 {
+            model
+                .add_variable(Variable {
+                    bounds: Bounds::new(0.0, 1.0),
+                    is_integer: idx % 2 == 0,
+                    is_active: idx % 3 != 0,
+                })
+                .unwrap();
+        }
+
+        assert_eq!(model.variable_is_integer_bits.len(), 3);
+        assert_eq!(model.variable_is_inactive_bits.len(), 3);
+
+        let var_64 = model.get_variable(VariableId::new(64)).unwrap();
+        assert!(var_64.is_integer);
+        assert!(var_64.is_active);
+
+        let var_129 = model.get_variable(VariableId::new(129)).unwrap();
+        assert!(!var_129.is_integer);
+        assert!(!var_129.is_active);
+    }
+
+    #[test]
+    fn test_default_variable_flags_do_not_allocate_words() {
+        let mut model = Model::new();
+        for _ in 0..1_024 {
+            model
+                .add_variable(Variable {
+                    bounds: Bounds::new(0.0, 1.0),
+                    is_integer: false,
+                    is_active: true,
+                })
+                .unwrap();
+        }
+        assert!(model.variable_is_integer_bits.is_empty());
+        assert!(model.variable_is_inactive_bits.is_empty());
     }
 
     #[test]
@@ -388,6 +584,32 @@ mod tests {
     }
 
     #[test]
+    fn test_columns_are_lazily_allocated() {
+        let mut model = Model::new();
+        let var_id = model
+            .add_variable(Variable {
+                bounds: Bounds::new(0.0, 10.0),
+                is_integer: false,
+                is_active: true,
+            })
+            .unwrap();
+
+        assert!(model.columns.is_empty());
+        assert_eq!(
+            model.get_column(var_id).expect("column should exist"),
+            &Vec::new()
+        );
+
+        let constraint_id = model
+            .add_constraint(Constraint {
+                bounds: Bounds::new(0.0, 100.0),
+            })
+            .unwrap();
+        model.set_coefficient(var_id, constraint_id, 1.0).unwrap();
+        assert_eq!(model.columns.len(), 1);
+    }
+
+    #[test]
     fn test_coefficients_persist_in_columns() {
         let mut model = Model::new();
         let v1 = model
@@ -425,6 +647,28 @@ mod tests {
 
         let col_v2 = model.get_column(v2).expect("v2 column missing");
         assert_eq!(col_v2, &vec![(c2, 3.5)]);
+    }
+
+    #[test]
+    fn test_single_entry_columns_use_inline_storage() {
+        let mut model = Model::new();
+        let var = model
+            .add_variable(Variable {
+                bounds: Bounds::new(0.0, 1.0),
+                is_integer: false,
+                is_active: true,
+            })
+            .unwrap();
+        let con = model
+            .add_constraint(Constraint {
+                bounds: Bounds::new(0.0, 1.0),
+            })
+            .unwrap();
+
+        model.set_coefficient(var, con, 4.0).unwrap();
+
+        let stored = model.columns.get(&var).expect("column exists");
+        assert!(matches!(stored, ColumnData::Single(_)));
     }
 
     #[test]
