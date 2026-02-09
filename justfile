@@ -24,3 +24,13 @@ doc:
 	cargo doc --workspace --no-deps
 
 ci: fmt-check clippy test
+
+# Python bindings
+python-dev:
+	cd bindings/python && maturin develop
+
+python-build:
+	cd bindings/python && maturin build --release
+
+python-test:
+	cd bindings/python && maturin develop && uv run pytest

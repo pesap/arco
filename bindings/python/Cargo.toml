@@ -1,0 +1,20 @@
+[package]
+name = "arco-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Python bindings for Arco"
+
+[lib]
+name = "arco"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28", features = ["extension-module"] }
+arco-core = { workspace = true }
+arco-expr = { workspace = true }
+
+[lints]
+workspace = true
