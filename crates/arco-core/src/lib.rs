@@ -6,8 +6,10 @@ pub mod solver;
 pub mod types;
 
 pub use model::{
-    CoefficientView, ConstraintView, CscInput, InspectOptions, Model, ModelError, ModelSnapshot,
-    ObjectiveView, SlackView, SnapshotMetadata, VariableView,
+    CoefficientView, ConstraintView, CscInput, DefaultPrettyPrintAdapter, InspectOptions, Model,
+    ModelError, ModelSnapshot, ObjectiveView, PrettyBoundGroup, PrettyPrintAdapter,
+    PrettyPrintOptions, PrettySection, SlackView, SnapshotMetadata, VariableView,
+    format_ascii_number,
 };
 
 pub use slack::{ElasticHandle, SlackBound, SlackHandle, SlackVariables};

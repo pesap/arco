@@ -18,6 +18,7 @@ mod csc_import;
 mod error;
 mod inspect;
 mod metadata;
+mod pretty;
 mod slack;
 mod storage;
 
@@ -32,6 +33,10 @@ pub use error::ModelError;
 pub use inspect::{
     CoefficientView, ConstraintView, InspectOptions, ModelSnapshot, ObjectiveView, SlackView,
     SnapshotMetadata, VariableView,
+};
+pub use pretty::{
+    DefaultPrettyPrintAdapter, PrettyBoundGroup, PrettyPrintAdapter, PrettyPrintOptions,
+    PrettySection, format_ascii_number,
 };
 
 /// A lazy model builder for linear and mixed-integer programs.
