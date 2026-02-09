@@ -5,6 +5,13 @@
 #   just py-test      — build extension + run Python tests
 #   just ci           — full CI pipeline
 #   just --list       — show all recipes
+#
+# Benchmarks:
+#   just bench-run                              — run benchmarks
+#   just bench-report results.jsonl             — print report
+#   just bench-compare base.jsonl new.jsonl     — compare two runs
+#   just bench-gate base.jsonl new.jsonl        — CI gate (10% threshold)
+#   just bench-gate base.jsonl new.jsonl 5 5    — CI gate (5% threshold)
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
@@ -79,7 +86,12 @@ py-test: py-dev
 docs-test: py-dev
     uv run pytest ../../scripts/test_docs_doctest.py -v
 
-# ── Benchmarks ────────────────────────────────────────────────────────────
+[group("python")]
+[doc("Build dev extension then launch IPython")]
+[working-directory: "bindings/python"]
+py-shell: py-dev
+    uv run ipython
+
 
 [group("bench")]
 [doc("Run the default benchmark suite")]

@@ -1,5 +1,8 @@
-> [!warning] `arco` is pretty new and it is not advised for production
-> environments. Use it at your own risk.
+> [!warning]
+> Arco is built primarily for internal use within our organization. You are
+> welcome to try it, but we make no guarantees about API stability or robustness
+> at this stage. For battle-tested alternatives, consider
+> [Pyomo](https://www.pyomo.org/) (Python) or [JuMP](https://jump.dev/) (Julia).
 
 <div align="center">
 
