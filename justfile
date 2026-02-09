@@ -9,6 +9,9 @@ fmt-check:
 	cargo fmt --all -- --check
 
 check:
+	cargo check --workspace --all-features --tests --benches --examples
+
+check-lib:
 	cargo check --workspace --all-features
 
 clippy:
@@ -16,5 +19,8 @@ clippy:
 
 test:
 	cargo test --workspace --all-features
+
+doc:
+	cargo doc --workspace --no-deps
 
 ci: fmt-check clippy test
