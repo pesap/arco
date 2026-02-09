@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "bindings/python"]
 exclude=["scripts"]
 resolver = "3"
 
@@ -10,6 +10,8 @@ sysinfo = "0.33"
 arrow-array = "51"
 arco-core = { path = "crates/arco-core" }
 arco-expr = { path = "crates/arco-expr" }
+arco-solver = { path = "crates/arco-solver" }
+arco-highs = { path = "crates/arco-highs" }
 arco-tools = { path = "crates/arco-tools" }
 
 [workspace.package]
