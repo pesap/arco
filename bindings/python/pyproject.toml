@@ -17,6 +17,7 @@ classifiers = [
 [tool.maturin]
 features = ["pyo3/extension-module"]
 include = ["arco.pyi"]
+python-source = "."
 
 [dependency-groups]
 dev = [

@@ -42,6 +42,7 @@ Task-oriented recipes for common operations. Each guide gets straight to the
 point with self-contained examples you can copy and run.
 
 - [Building Optimization Models](how-to/building-optimization-models.md) -- variables, constraints, objectives, and solving in recipe form.
+- [Define Block Schemas](how-to/block-schemas.md) -- define typed block input/output contracts for block composition.
 - [Numpy Integration](how-to/numpy-integration.md) -- array arithmetic, element-wise bounds, indexing, and reduction operators.
 - [Configure Solver](how-to/configure-solver.md) -- solver objects, settings, and reusable configurations.
 - [Debug Infeasibility](how-to/debug-infeasibility.md) -- use slacks and elastic constraints to diagnose infeasible models.

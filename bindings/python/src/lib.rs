@@ -31,7 +31,7 @@ use arco_core::types::Bounds;
 use arco_core::{InspectOptions, Model, Objective, Sense, SlackBound, Variable};
 use arco_expr::{ComparisonSense, ConstraintId, VariableId};
 
-use pyo3::exceptions::{PyKeyError, PyRuntimeError};
+use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
 use std::collections::HashSet;
@@ -56,27 +56,112 @@ pub use views::{
     PyCoefficientView, PyConstraintView, PyObjectiveView, PySlackView, PyVariableView,
 };
 
-/// A handle returned by model.add_block() with .input() and .output() port accessors.
+const ARCO_BLOCK_MARKER_ATTR: &str = "__arco_block_marker__";
+const ARCO_BLOCK_NAME_ATTR: &str = "__arco_block_name__";
+const ARCO_BLOCK_INPUT_SCHEMA_ATTR: &str = "__arco_block_input_schema__";
+const ARCO_BLOCK_INPUT_FIELDS_ATTR: &str = "__arco_block_input_fields__";
+const ARCO_BLOCK_EXPECTS_CTX_ATTR: &str = "__arco_block_expects_ctx__";
+
+#[pyclass(name = "BlockPorts")]
+pub struct PyBlockPorts {
+    block_name: String,
+    kind: String,
+    keys: HashSet<String>,
+}
+
+#[pymethods]
+impl PyBlockPorts {
+    fn __getattr__(&self, key: &str) -> PyResult<BlockPort> {
+        if !self.keys.contains(key) {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown {} port '{}.{}'",
+                self.kind, self.block_name, key
+            )));
+        }
+        match self.kind.as_str() {
+            "input" => Ok(BlockPort::new_input(
+                self.block_name.clone(),
+                key.to_string(),
+            )),
+            _ => Ok(BlockPort::new_output(
+                self.block_name.clone(),
+                key.to_string(),
+            )),
+        }
+    }
+
+    fn __dir__(&self) -> Vec<String> {
+        let mut keys = self.keys.iter().cloned().collect::<Vec<_>>();
+        keys.sort();
+        keys
+    }
+
+    fn keys(&self) -> Vec<String> {
+        let mut keys = self.keys.iter().cloned().collect::<Vec<_>>();
+        keys.sort();
+        keys
+    }
+}
+
+/// A handle returned by model.add_block() with typed `.in_` and `.out` accessors.
 #[pyclass(name = "BlockHandle")]
 pub struct PyBlockHandle {
     name: String,
+    input_keys: HashSet<String>,
+    output_keys: HashSet<String>,
 }
 
 #[pymethods]
 impl PyBlockHandle {
     /// Get an input port reference for linking.
-    fn input(&self, key: String) -> BlockPort {
-        BlockPort::new_input(self.name.clone(), key)
+    fn input(&self, key: String) -> PyResult<BlockPort> {
+        if !self.input_keys.contains(&key) {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown input port '{}.{}'",
+                self.name, key
+            )));
+        }
+        Ok(BlockPort::new_input(self.name.clone(), key))
     }
 
     /// Get an output port reference for linking.
-    fn output(&self, key: String) -> BlockPort {
-        BlockPort::new_output(self.name.clone(), key)
+    fn output(&self, key: String) -> PyResult<BlockPort> {
+        if !self.output_keys.contains(&key) {
+            return Err(PyKeyError::new_err(format!(
+                "Unknown output port '{}.{}'",
+                self.name, key
+            )));
+        }
+        Ok(BlockPort::new_output(self.name.clone(), key))
     }
 
     #[getter]
     fn name(&self) -> &str {
         &self.name
+    }
+
+    #[getter]
+    fn in_(&self, py: Python<'_>) -> PyResult<Py<PyBlockPorts>> {
+        Py::new(
+            py,
+            PyBlockPorts {
+                block_name: self.name.clone(),
+                kind: "input".to_string(),
+                keys: self.input_keys.clone(),
+            },
+        )
+    }
+
+    #[getter]
+    fn out(&self, py: Python<'_>) -> PyResult<Py<PyBlockPorts>> {
+        Py::new(
+            py,
+            PyBlockPorts {
+                block_name: self.name.clone(),
+                kind: "output".to_string(),
+                keys: self.output_keys.clone(),
+            },
+        )
     }
 
     fn __repr__(&self) -> String {
@@ -135,11 +220,101 @@ impl PyBlockResults {
 
 /// Stored block definition for model.add_block()
 struct BlockDef {
-    build_fn: PyObject,
     name: String,
-    inputs: Py<PyDict>,
-    outputs: Py<PyDict>,
-    extract: Option<PyObject>,
+    build_adapter: PyObject,
+    extract_adapter: PyObject,
+    input_fields: Py<PyDict>,
+    output_fields: Py<PyDict>,
+    provided_inputs: Py<PyDict>,
+}
+
+struct TypedBlockMeta {
+    default_name: String,
+    input_schema: PyObject,
+    input_fields: Py<PyDict>,
+    expects_ctx: bool,
+}
+
+struct TypedExtractMeta {
+    output_schema: PyObject,
+    output_fields: Py<PyDict>,
+    expects_ctx: bool,
+}
+
+#[pyclass]
+struct TypedBlockBuilder {
+    user_fn: PyObject,
+    input_schema: PyObject,
+    expects_ctx: bool,
+}
+
+#[pymethods]
+impl TypedBlockBuilder {
+    fn __call__(&self, py: Python<'_>, ctx: PyObject) -> PyResult<PyObject> {
+        let inputs_obj = ctx.bind(py).getattr("inputs")?.unbind();
+        let data =
+            coerce_to_schema_instance(py, inputs_obj, self.input_schema.bind(py), "Block input")?;
+        let model = Py::new(py, PyModel::new(None, None)?)?.into_any();
+        let result = if self.expects_ctx {
+            self.user_fn.bind(py).call1((
+                model.clone_ref(py),
+                data.clone_ref(py),
+                ctx.clone_ref(py),
+            ))?
+        } else {
+            self.user_fn
+                .bind(py)
+                .call1((model.clone_ref(py), data.clone_ref(py)))?
+        };
+        if !result.is_none() {
+            return Err(PyTypeError::new_err(
+                "block build function must return None",
+            ));
+        }
+        Ok(model)
+    }
+}
+
+#[pyclass]
+struct TypedBlockExtractor {
+    extract_fn: PyObject,
+    input_schema: PyObject,
+    output_schema: PyObject,
+    expects_ctx: bool,
+}
+
+#[pymethods]
+impl TypedBlockExtractor {
+    fn __call__(&self, py: Python<'_>, solution: PyObject, ctx: PyObject) -> PyResult<PyObject> {
+        let inputs = ctx.bind(py).getattr("inputs")?.unbind();
+        let data =
+            coerce_to_schema_instance(py, inputs, self.input_schema.bind(py), "Block input")?;
+        let outputs = if self.expects_ctx {
+            self.extract_fn
+                .bind(py)
+                .call1((solution, data, ctx.clone_ref(py)))?
+        } else {
+            self.extract_fn.bind(py).call1((solution, data))?
+        };
+        schema_instance_to_dict(
+            py,
+            outputs.unbind(),
+            self.output_schema.bind(py),
+            "Block output",
+        )
+    }
+}
+
+#[pyclass]
+struct TypedBlockDecorator {
+    name: Option<String>,
+}
+
+#[pymethods]
+impl TypedBlockDecorator {
+    fn __call__(&self, py: Python<'_>, func: PyObject) -> PyResult<PyObject> {
+        decorate_block_function(py, func.bind(py), self.name.as_deref())
+    }
 }
 
 /// Stored link definition for model.link()
@@ -237,30 +412,14 @@ impl PyModel {
         for block_def in &self.block_defs {
             let add_kwargs = PyDict::new(py);
             add_kwargs.set_item("name", &block_def.name)?;
-            add_kwargs.set_item("outputs", block_def.outputs.bind(py))?;
-            if let Some(ref extract) = block_def.extract {
-                add_kwargs.set_item("extract", extract.bind(py))?;
-            }
-            add_kwargs.set_item("inputs", block_def.inputs.bind(py))?;
-
-            // Build an inputs_schema dict with all input keys (data + linked).
-            // BlockModel.validate() checks the Block's schema (inputs field) to
-            // verify that link targets are declared.
-            let schema = PyDict::new(py);
-            for key in block_def.inputs.bind(py).keys() {
-                schema.set_item(key, py.None())?;
-            }
-            // Also include keys from links targeting this block
-            for link_def in &self.link_defs {
-                if link_def.target.block_name == block_def.name {
-                    schema.set_item(&link_def.target.key, py.None())?;
-                }
-            }
-            add_kwargs.set_item("inputs_schema", schema)?;
+            add_kwargs.set_item("outputs", block_def.output_fields.bind(py))?;
+            add_kwargs.set_item("extract", block_def.extract_adapter.bind(py))?;
+            add_kwargs.set_item("inputs", block_def.provided_inputs.bind(py))?;
+            add_kwargs.set_item("inputs_schema", block_def.input_fields.bind(py))?;
 
             block_model.call_method(
                 "add_block",
-                (block_def.build_fn.bind(py),),
+                (block_def.build_adapter.bind(py),),
                 Some(&add_kwargs),
             )?;
         }
@@ -1739,54 +1898,96 @@ impl PyModel {
         PyModelSnapshot::from_snapshot(py, snapshot)
     }
 
-    /// Add a block to this model for composed optimization.
+    /// Add a typed block function to this model for composed optimization.
     ///
-    /// The build function receives a BlockContext with `ctx.inputs` and can
-    /// call `ctx.attach(key, value)` to stash objects for extraction.
+    /// Blocks must be decorated with `@arco.block` and use the function signature
+    /// `(model, data)` or `(model, data, ctx)` where `data` is a dataclass or
+    /// pydantic model annotation.
     ///
-    /// Returns a BlockHandle with `.input(key)` and `.output(key)` for linking.
-    #[pyo3(signature = (build_fn, *, name, inputs=None, outputs=None, extract=None))]
+    /// The `extract` callable must use `(solution, data)` or
+    /// `(solution, data, ctx)` and return a dataclass or pydantic model.
+    ///
+    /// Returns a BlockHandle with typed `.in_` and `.out` port accessors.
+    #[pyo3(signature = (block_fn, *, name=None, data=None, extract))]
     fn add_block(
         &mut self,
         py: Python<'_>,
-        build_fn: PyObject,
-        name: String,
-        inputs: Option<&Bound<'_, PyDict>>,
-        outputs: Option<&Bound<'_, PyDict>>,
-        extract: Option<PyObject>,
+        block_fn: PyObject,
+        name: Option<String>,
+        data: Option<PyObject>,
+        extract: PyObject,
     ) -> PyResult<PyBlockHandle> {
-        // Validate the build function is callable
-        if !build_fn.bind(py).is_callable() {
-            return Err(PyRuntimeError::new_err(
-                "add_block: build_fn must be callable",
-            ));
-        }
+        let meta = typed_block_meta_from_decorated(py, block_fn.bind(py))?;
+        let block_name = name.unwrap_or_else(|| meta.default_name.clone());
+        let extract_meta = typed_extract_meta_from_function(
+            py,
+            extract.bind(py),
+            meta.input_schema.bind(py),
+            &block_name,
+        )?;
 
         // Validate no duplicate block names
-        if self.block_defs.iter().any(|b| b.name == name) {
+        if self.block_defs.iter().any(|b| b.name == block_name) {
             return Err(PyRuntimeError::new_err(format!(
                 "add_block: block '{}' already exists",
-                name
+                block_name
             )));
         }
 
-        let inputs_dict = inputs.map_or_else(|| PyDict::new(py).unbind(), |d| d.clone().unbind());
-        let outputs_dict = outputs.map_or_else(|| PyDict::new(py).unbind(), |d| d.clone().unbind());
+        let provided_inputs = if let Some(data) = data {
+            let typed_data =
+                coerce_to_schema_instance(py, data, meta.input_schema.bind(py), "Block root data")?;
+            let as_dict = schema_instance_to_dict(
+                py,
+                typed_data,
+                meta.input_schema.bind(py),
+                "Block root data",
+            )?;
+            as_dict.bind(py).cast::<PyDict>()?.clone().unbind()
+        } else {
+            PyDict::new(py).unbind()
+        };
+
+        let build_adapter = Py::new(
+            py,
+            TypedBlockBuilder {
+                user_fn: block_fn,
+                input_schema: meta.input_schema.clone_ref(py),
+                expects_ctx: meta.expects_ctx,
+            },
+        )?
+        .into_any();
+
+        let extract_adapter = Py::new(
+            py,
+            TypedBlockExtractor {
+                extract_fn: extract,
+                input_schema: meta.input_schema.clone_ref(py),
+                output_schema: extract_meta.output_schema.clone_ref(py),
+                expects_ctx: extract_meta.expects_ctx,
+            },
+        )?
+        .into_any();
 
         self.block_defs.push(BlockDef {
-            build_fn,
-            name: name.clone(),
-            inputs: inputs_dict,
-            outputs: outputs_dict,
-            extract,
+            name: block_name.clone(),
+            build_adapter,
+            extract_adapter,
+            input_fields: meta.input_fields.clone_ref(py),
+            output_fields: extract_meta.output_fields.clone_ref(py),
+            provided_inputs,
         });
 
-        Ok(PyBlockHandle { name })
+        Ok(PyBlockHandle {
+            name: block_name,
+            input_keys: collect_schema_keys(meta.input_fields.bind(py))?,
+            output_keys: collect_schema_keys(extract_meta.output_fields.bind(py))?,
+        })
     }
 
     /// Link a block output to a block input for composed models.
     #[pyo3(signature = (source, target))]
-    fn link(&mut self, source: BlockPort, target: BlockPort) -> PyResult<()> {
+    fn link(&mut self, py: Python<'_>, source: BlockPort, target: BlockPort) -> PyResult<()> {
         if source.kind != "output" {
             return Err(PyRuntimeError::new_err(
                 "link: source must be a block output port",
@@ -1797,6 +1998,55 @@ impl PyModel {
                 "link: target must be a block input port",
             ));
         }
+
+        let source_block = self
+            .block_defs
+            .iter()
+            .find(|block| block.name == source.block_name)
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "link: unknown source block '{}'",
+                    source.block_name
+                ))
+            })?;
+        let target_block = self
+            .block_defs
+            .iter()
+            .find(|block| block.name == target.block_name)
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "link: unknown target block '{}'",
+                    target.block_name
+                ))
+            })?;
+
+        let source_schema = source_block
+            .output_fields
+            .bind(py)
+            .get_item(&source.key)?
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "link: unknown source port '{}.{}'",
+                    source.block_name, source.key
+                ))
+            })?;
+        let target_schema = target_block
+            .input_fields
+            .bind(py)
+            .get_item(&target.key)?
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "link: unknown target port '{}.{}'",
+                    target.block_name, target.key
+                ))
+            })?;
+        if !source_schema.eq(&target_schema)? {
+            return Err(PyTypeError::new_err(format!(
+                "link: type mismatch for '{}.{}' -> '{}.{}'",
+                source.block_name, source.key, target.block_name, target.key
+            )));
+        }
+
         self.link_defs.push(LinkDef { source, target });
         Ok(())
     }
@@ -1806,6 +2056,319 @@ impl PyModel {
     fn has_blocks(&self) -> bool {
         !self.block_defs.is_empty()
     }
+}
+
+#[pyfunction]
+#[pyo3(signature = (func=None, *, name=None))]
+fn typed_block(py: Python<'_>, func: Option<PyObject>, name: Option<String>) -> PyResult<PyObject> {
+    if let Some(func) = func {
+        return decorate_block_function(py, func.bind(py), name.as_deref());
+    }
+    Ok(Py::new(py, TypedBlockDecorator { name })?.into_any())
+}
+
+fn decorate_block_function(
+    py: Python<'_>,
+    func: &Bound<'_, PyAny>,
+    name_override: Option<&str>,
+) -> PyResult<PyObject> {
+    let meta = typed_block_meta_from_function(py, func, name_override)?;
+    func.setattr(ARCO_BLOCK_MARKER_ATTR, true)?;
+    func.setattr(ARCO_BLOCK_NAME_ATTR, &meta.default_name)?;
+    func.setattr(ARCO_BLOCK_INPUT_SCHEMA_ATTR, meta.input_schema.bind(py))?;
+    func.setattr(ARCO_BLOCK_INPUT_FIELDS_ATTR, meta.input_fields.bind(py))?;
+    func.setattr(ARCO_BLOCK_EXPECTS_CTX_ATTR, meta.expects_ctx)?;
+    Ok(func.clone().unbind())
+}
+
+fn typed_block_meta_from_decorated(
+    _py: Python<'_>,
+    func: &Bound<'_, PyAny>,
+) -> PyResult<TypedBlockMeta> {
+    let marker = func
+        .getattr(ARCO_BLOCK_MARKER_ATTR)
+        .and_then(|value| value.extract::<bool>())
+        .unwrap_or(false);
+    if !marker {
+        return Err(PyTypeError::new_err(
+            "add_block: block function must be decorated with @arco.block",
+        ));
+    }
+    let default_name = func.getattr(ARCO_BLOCK_NAME_ATTR)?.extract::<String>()?;
+    let input_schema = func.getattr(ARCO_BLOCK_INPUT_SCHEMA_ATTR)?.unbind();
+    let input_fields = func
+        .getattr(ARCO_BLOCK_INPUT_FIELDS_ATTR)?
+        .cast::<PyDict>()?
+        .clone()
+        .unbind();
+    let expects_ctx = func
+        .getattr(ARCO_BLOCK_EXPECTS_CTX_ATTR)?
+        .extract::<bool>()?;
+
+    Ok(TypedBlockMeta {
+        default_name,
+        input_schema,
+        input_fields,
+        expects_ctx,
+    })
+}
+
+fn typed_block_meta_from_function(
+    py: Python<'_>,
+    func: &Bound<'_, PyAny>,
+    name_override: Option<&str>,
+) -> PyResult<TypedBlockMeta> {
+    if !func.is_callable() {
+        return Err(PyTypeError::new_err("block: expected a callable"));
+    }
+    let inspect = PyModule::import(py, "inspect")?;
+    let signature = inspect.getattr("signature")?.call1((func,))?;
+    let empty = inspect.getattr("_empty")?;
+    let parameter = inspect.getattr("Parameter")?;
+    let var_positional = parameter.getattr("VAR_POSITIONAL")?;
+    let var_keyword = parameter.getattr("VAR_KEYWORD")?;
+    let keyword_only = parameter.getattr("KEYWORD_ONLY")?;
+
+    let mut params: Vec<PyObject> = Vec::new();
+    let parameter_values = signature.getattr("parameters")?.call_method0("values")?;
+    for param in parameter_values.try_iter()? {
+        params.push(param?.unbind());
+    }
+    if params.len() != 2 && params.len() != 3 {
+        return Err(PyTypeError::new_err(
+            "block: expected signature (model, data) or (model, data, ctx)",
+        ));
+    }
+    for param in &params {
+        let kind = param.bind(py).getattr("kind")?;
+        if kind.eq(&var_positional)? || kind.eq(&var_keyword)? {
+            return Err(PyTypeError::new_err(
+                "block: variadic *args/**kwargs are not supported",
+            ));
+        }
+    }
+    for param in &params {
+        let kind = param.bind(py).getattr("kind")?;
+        if kind.eq(&keyword_only)? {
+            return Err(PyTypeError::new_err(
+                "block: keyword-only parameters are not supported",
+            ));
+        }
+    }
+
+    let input_schema = params[1].bind(py).getattr("annotation")?;
+    if input_schema.is(&empty) {
+        return Err(PyTypeError::new_err(
+            "block: data parameter must include a schema annotation",
+        ));
+    }
+    validate_schema_type(py, &input_schema, "input")?;
+
+    let default_name = if let Some(name) = name_override {
+        name.to_string()
+    } else {
+        func.getattr("__name__")?.extract::<String>()?
+    };
+
+    let input_fields = schema_fields_dict(py, &input_schema)?;
+    Ok(TypedBlockMeta {
+        default_name,
+        input_schema: input_schema.unbind(),
+        input_fields,
+        expects_ctx: params.len() == 3,
+    })
+}
+
+fn typed_extract_meta_from_function(
+    py: Python<'_>,
+    extract: &Bound<'_, PyAny>,
+    expected_input_schema: &Bound<'_, PyAny>,
+    block_name: &str,
+) -> PyResult<TypedExtractMeta> {
+    if !extract.is_callable() {
+        return Err(PyTypeError::new_err(format!(
+            "add_block: extract for block '{block_name}' must be callable"
+        )));
+    }
+    let inspect = PyModule::import(py, "inspect")?;
+    let signature = inspect.getattr("signature")?.call1((extract,))?;
+    let empty = inspect.getattr("_empty")?;
+    let parameter = inspect.getattr("Parameter")?;
+    let var_positional = parameter.getattr("VAR_POSITIONAL")?;
+    let var_keyword = parameter.getattr("VAR_KEYWORD")?;
+    let keyword_only = parameter.getattr("KEYWORD_ONLY")?;
+
+    let mut params: Vec<PyObject> = Vec::new();
+    let parameter_values = signature.getattr("parameters")?.call_method0("values")?;
+    for param in parameter_values.try_iter()? {
+        params.push(param?.unbind());
+    }
+    if params.len() != 2 && params.len() != 3 {
+        return Err(PyTypeError::new_err(format!(
+            "add_block: extract for block '{block_name}' must use (solution, data) or (solution, data, ctx)"
+        )));
+    }
+    for param in &params {
+        let kind = param.bind(py).getattr("kind")?;
+        if kind.eq(&var_positional)? || kind.eq(&var_keyword)? || kind.eq(&keyword_only)? {
+            return Err(PyTypeError::new_err(format!(
+                "add_block: extract for block '{block_name}' cannot use variadic or keyword-only parameters"
+            )));
+        }
+    }
+
+    let input_annotation = params[1].bind(py).getattr("annotation")?;
+    if input_annotation.is(&empty) {
+        return Err(PyTypeError::new_err(format!(
+            "add_block: extract for block '{block_name}' must annotate the data parameter"
+        )));
+    }
+    if !input_annotation.eq(expected_input_schema)? {
+        return Err(PyTypeError::new_err(format!(
+            "add_block: extract data annotation must match block input schema for '{block_name}'"
+        )));
+    }
+
+    let output_schema = signature.getattr("return_annotation")?;
+    if output_schema.is(&empty) {
+        return Err(PyTypeError::new_err(format!(
+            "add_block: extract for block '{block_name}' must annotate its return type"
+        )));
+    }
+    validate_schema_type(py, &output_schema, "output")?;
+
+    let output_fields = schema_fields_dict(py, &output_schema)?;
+    Ok(TypedExtractMeta {
+        output_schema: output_schema.unbind(),
+        output_fields,
+        expects_ctx: params.len() == 3,
+    })
+}
+
+fn validate_schema_type(py: Python<'_>, schema: &Bound<'_, PyAny>, role: &str) -> PyResult<()> {
+    if is_dataclass_schema(py, schema)? || is_pydantic_schema(py, schema)? {
+        return Ok(());
+    }
+    Err(PyTypeError::new_err(format!(
+        "block: {role} schema must be a dataclass or pydantic BaseModel type"
+    )))
+}
+
+fn is_dataclass_schema(py: Python<'_>, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if schema.cast::<PyType>().is_err() {
+        return Ok(false);
+    }
+    let dataclasses = PyModule::import(py, "dataclasses")?;
+    dataclasses
+        .getattr("is_dataclass")?
+        .call1((schema,))?
+        .extract::<bool>()
+}
+
+fn is_pydantic_schema(py: Python<'_>, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let Ok(schema_type) = schema.cast::<PyType>() else {
+        return Ok(false);
+    };
+    let Ok(pydantic) = PyModule::import(py, "pydantic") else {
+        return Ok(false);
+    };
+    let base_model_any = pydantic.getattr("BaseModel")?;
+    let base_model = base_model_any.cast::<PyType>()?;
+    schema_type.is_subclass(base_model)
+}
+
+fn schema_fields_dict(py: Python<'_>, schema: &Bound<'_, PyAny>) -> PyResult<Py<PyDict>> {
+    if is_dataclass_schema(py, schema)? {
+        let dataclasses = PyModule::import(py, "dataclasses")?;
+        let fields = dataclasses.getattr("fields")?.call1((schema,))?;
+        let out = PyDict::new(py);
+        for field in fields.try_iter()? {
+            let field = field?;
+            out.set_item(field.getattr("name")?, field.getattr("type")?)?;
+        }
+        return Ok(out.unbind());
+    }
+    if is_pydantic_schema(py, schema)? {
+        let out = PyDict::new(py);
+        let fields_any = schema.getattr("model_fields")?;
+        let fields = fields_any.cast::<PyDict>()?;
+        for (name, field) in fields.iter() {
+            out.set_item(name, field.getattr("annotation")?)?;
+        }
+        return Ok(out.unbind());
+    }
+    Err(PyTypeError::new_err(
+        "Unsupported schema type while extracting fields",
+    ))
+}
+
+fn coerce_to_schema_instance(
+    py: Python<'_>,
+    value: PyObject,
+    schema: &Bound<'_, PyAny>,
+    context: &str,
+) -> PyResult<PyObject> {
+    if value.bind(py).is_instance(schema)? {
+        return Ok(value);
+    }
+    if is_pydantic_schema(py, schema)? {
+        let validated = schema.call_method1("model_validate", (value.clone_ref(py),))?;
+        return Ok(validated.unbind());
+    }
+    if is_dataclass_schema(py, schema)? {
+        if value.bind(py).is_instance_of::<PyDict>() {
+            let dict = value.bind(py).cast::<PyDict>()?;
+            let instance = schema.call((), Some(dict))?;
+            return Ok(instance.unbind());
+        }
+        return Err(PyValueError::new_err(format!(
+            "{context} must be a dict or {} instance",
+            schema.get_type().name()?
+        )));
+    }
+    Err(PyTypeError::new_err(format!(
+        "{context} has unsupported schema type"
+    )))
+}
+
+fn schema_instance_to_dict(
+    py: Python<'_>,
+    value: PyObject,
+    schema: &Bound<'_, PyAny>,
+    context: &str,
+) -> PyResult<PyObject> {
+    if value.bind(py).is_instance_of::<PyDict>() {
+        return Ok(value);
+    }
+    if is_pydantic_schema(py, schema)? {
+        return Ok(value.bind(py).call_method0("model_dump")?.unbind());
+    }
+    if is_dataclass_schema(py, schema)? {
+        if !value.bind(py).is_instance(schema)? {
+            return Err(PyValueError::new_err(format!(
+                "{context} must be a {} instance",
+                schema.get_type().name()?
+            )));
+        }
+        let fields = schema_fields_dict(py, schema)?;
+        let out = PyDict::new(py);
+        for (name, _) in fields.bind(py).iter() {
+            let key = name.extract::<String>()?;
+            out.set_item(&key, value.bind(py).getattr(&key)?)?;
+        }
+        return Ok(out.into_any().unbind());
+    }
+    Err(PyTypeError::new_err(format!(
+        "{context} has unsupported schema type"
+    )))
+}
+
+fn collect_schema_keys(fields: &Bound<'_, PyDict>) -> PyResult<HashSet<String>> {
+    let mut keys = HashSet::new();
+    for key in fields.keys().iter() {
+        keys.insert(key.extract::<String>()?);
+    }
+    Ok(keys)
 }
 
 #[cfg(test)]
@@ -1997,7 +2560,10 @@ fn arco(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register all module classes
     m.add_class::<PyModel>()?;
     m.add_class::<PyBlockHandle>()?;
+    m.add_class::<PyBlockPorts>()?;
     m.add_class::<PyBlockResults>()?;
+    let typed_block_fn = wrap_pyfunction!(typed_block, m)?;
+    m.add_function(typed_block_fn.clone())?;
 
     // Register from submodules
     enums::register(m)?;
@@ -2018,6 +2584,7 @@ fn arco(m: &Bound<'_, PyModule>) -> PyResult<()> {
     iterators::register(m)?;
     bounds::export_bound_constants(m)?;
     add_blocks_submodule(m.py(), m)?;
+    m.setattr("block", typed_block_fn)?;
 
     Ok(())
 }
