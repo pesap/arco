@@ -18,8 +18,7 @@ arco-expr = { workspace = true }
 arco-tools = { workspace = true }
 tracing = { workspace = true }
 serde_json = { workspace = true }
-arrow-array = { workspace = true, optional = true }
 
 [features]
 default = []
-arrow = ["dep:arrow-array"]
+arrow = []

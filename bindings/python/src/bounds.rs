@@ -262,3 +262,19 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBoundType>()?;
     Ok(())
 }
+
+pub fn export_bound_constants(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Re-export enum members at module top-level for ergonomic imports:
+    // `from arco import NonNegativeFloat, Binary`
+    m.add("PositiveFloat", PyBoundType::PositiveFloat)?;
+    m.add("NegativeFloat", PyBoundType::NegativeFloat)?;
+    m.add("NonNegativeFloat", PyBoundType::NonNegativeFloat)?;
+    m.add("NonPositiveFloat", PyBoundType::NonPositiveFloat)?;
+    m.add("PositiveInt", PyBoundType::PositiveInt)?;
+    m.add("NegativeInt", PyBoundType::NegativeInt)?;
+    m.add("NonNegativeInt", PyBoundType::NonNegativeInt)?;
+    m.add("NonPositiveInt", PyBoundType::NonPositiveInt)?;
+    m.add("Binary", PyBoundType::Binary)?;
+
+    Ok(())
+}

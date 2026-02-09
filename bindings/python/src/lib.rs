@@ -1747,6 +1747,7 @@ fn arco(m: &Bound<'_, PyModule>) -> PyResult<()> {
     snapshot::register(m)?;
     logging::register(m)?;
     iterators::register(m)?;
+    bounds::export_bound_constants(m)?;
     add_blocks_submodule(m.py(), m)?;
 
     Ok(())
