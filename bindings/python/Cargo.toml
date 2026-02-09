@@ -1,11 +1,14 @@
 [package]
 name = "arco-python"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-authors.workspace = true
-description = "Python bindings for Arco"
+version = { workspace = true }
+description = "Bindings of arco for Python"
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = false
 
 [lib]
 name = "arco"
@@ -15,6 +18,14 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.28", features = ["extension-module"] }
 arco-core = { workspace = true }
 arco-expr = { workspace = true }
+arco-highs = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[features]
+default = []
+arrow = []
 
 [lints]
 workspace = true
