@@ -12,7 +12,7 @@ use crate::constraint::PyConstraint;
 use crate::variable::PyVariable;
 
 /// Python enum for solution status.
-#[pyclass(name = "SolutionStatus", eq, eq_int)]
+#[pyclass(from_py_object, name = "SolutionStatus", eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum PySolutionStatus {

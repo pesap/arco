@@ -18,7 +18,7 @@ fn pythonize_metadata(
 }
 
 /// View of a variable in a model snapshot.
-#[pyclass(name = "VariableView")]
+#[pyclass(from_py_object, name = "VariableView")]
 #[derive(Clone)]
 pub struct PyVariableView {
     pub id: u32,
@@ -63,7 +63,7 @@ impl PyVariableView {
 }
 
 /// View of a constraint in a model snapshot.
-#[pyclass(name = "ConstraintView")]
+#[pyclass(from_py_object, name = "ConstraintView")]
 #[derive(Clone)]
 pub struct PyConstraintView {
     pub id: u32,
@@ -102,7 +102,7 @@ impl PyConstraintView {
 }
 
 /// View of a coefficient in a model snapshot.
-#[pyclass(name = "CoefficientView")]
+#[pyclass(from_py_object, name = "CoefficientView")]
 #[derive(Clone)]
 pub struct PyCoefficientView {
     pub variable_id: u32,
@@ -129,7 +129,7 @@ impl PyCoefficientView {
 }
 
 /// View of the objective in a model snapshot.
-#[pyclass(name = "ObjectiveView")]
+#[pyclass(from_py_object, name = "ObjectiveView")]
 #[derive(Clone)]
 pub struct PyObjectiveView {
     pub sense: Option<String>,
@@ -156,7 +156,7 @@ impl PyObjectiveView {
 }
 
 /// View of a slack variable in a model snapshot.
-#[pyclass(name = "SlackView")]
+#[pyclass(from_py_object, name = "SlackView")]
 #[derive(Clone)]
 pub struct PySlackView {
     pub constraint_id: u32,

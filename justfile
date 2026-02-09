@@ -26,11 +26,15 @@ doc:
 ci: fmt-check clippy test
 
 # Python bindings
+
+uv-sync:
+	cd bindings && uv sync
+
 python-dev:
-	cd bindings/python && maturin develop
+	cd bindings/python && uv run maturin develop
 
 python-build:
-	cd bindings/python && maturin build --release
+	cd bindings/python && uv run maturin build --release
 
 python-test:
 	cd bindings/python && maturin develop && uv run pytest

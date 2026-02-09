@@ -151,7 +151,7 @@ fn solver_repr(label: &str, settings: &SolverSettings) -> String {
     )
 }
 
-#[pyclass(subclass, name = "Solver")]
+#[pyclass(from_py_object, subclass, name = "Solver")]
 #[derive(Debug, Clone)]
 pub struct PySolver {
     pub settings: SolverSettings,
@@ -230,7 +230,7 @@ impl PySolver {
     }
 }
 
-#[pyclass(extends = PySolver, name = "HiGHS")]
+#[pyclass(from_py_object, extends = PySolver, name = "HiGHS")]
 #[derive(Debug, Clone)]
 pub struct PyHiGHS;
 
@@ -278,7 +278,7 @@ impl PyHiGHS {
     }
 }
 
-#[pyclass(extends = PySolver, name = "Xpress")]
+#[pyclass(from_py_object, extends = PySolver, name = "Xpress")]
 #[derive(Debug, Clone)]
 pub struct PyXpress;
 

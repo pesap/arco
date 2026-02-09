@@ -12,7 +12,7 @@ use crate::expr::{PyConstraintExpr, PyExpr};
 /// Wraps a variable ID with cached metadata (name, bounds, integrality).
 /// Participates in arithmetic to produce `Expr` objects and in
 /// comparisons to produce `ConstraintExpr` objects.
-#[pyclass(name = "Variable")]
+#[pyclass(from_py_object, name = "Variable")]
 #[derive(Debug, Clone)]
 pub struct PyVariable {
     pub var_id: u32,

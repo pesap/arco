@@ -13,6 +13,7 @@ arco-expr = { path = "crates/arco-expr" }
 arco-solver = { path = "crates/arco-solver" }
 arco-highs = { path = "crates/arco-highs" }
 arco-tools = { path = "crates/arco-tools" }
+arco-blocks = { path = "crates/arco-blocks" }
 
 [workspace.package]
 version = "0.1.0"

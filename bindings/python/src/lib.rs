@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 //! Python bindings for Arco optimization using PyO3
 //!
 //! This module exposes Arco's model builder and solver to Python with zero-copy access
@@ -24,6 +22,7 @@ mod solver;
 mod variable;
 mod views;
 
+use arco_blocks::{BlockPort, add_blocks_submodule};
 use arco_core::model::CscInput;
 use arco_core::types::Bounds;
 use arco_core::{InspectOptions, Model, Objective, Sense, SlackBound, Variable};
@@ -31,7 +30,7 @@ use arco_expr::{ComparisonSense, ConstraintId, VariableId};
 
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyType};
+use pyo3::types::{PyDict, PyList, PyType};
 
 pub(crate) type PyObject = Py<PyAny>;
 
@@ -52,58 +51,6 @@ pub use views::{
     PyCoefficientView, PyConstraintView, PyObjectiveView, PySlackView, PyVariableView,
 };
 
-/// Link endpoint for composed-block wiring.
-#[pyclass(name = "BlockPort")]
-#[derive(Clone)]
-pub struct PyBlockPort {
-    block_name: String,
-    key: String,
-    kind: String,
-}
-
-impl PyBlockPort {
-    fn new_input(block_name: String, key: String) -> Self {
-        Self {
-            block_name,
-            key,
-            kind: "input".to_string(),
-        }
-    }
-
-    fn new_output(block_name: String, key: String) -> Self {
-        Self {
-            block_name,
-            key,
-            kind: "output".to_string(),
-        }
-    }
-}
-
-#[pymethods]
-impl PyBlockPort {
-    #[getter]
-    fn block_name(&self) -> &str {
-        &self.block_name
-    }
-
-    #[getter]
-    fn key(&self) -> &str {
-        &self.key
-    }
-
-    #[getter]
-    fn kind(&self) -> &str {
-        &self.kind
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "BlockPort(block='{}', key='{}', kind='{}')",
-            self.block_name, self.key, self.kind
-        )
-    }
-}
-
 /// A handle returned by model.add_block() with .input() and .output() port accessors.
 #[pyclass(name = "BlockHandle")]
 pub struct PyBlockHandle {
@@ -113,13 +60,13 @@ pub struct PyBlockHandle {
 #[pymethods]
 impl PyBlockHandle {
     /// Get an input port reference for linking.
-    fn input(&self, key: String) -> PyBlockPort {
-        PyBlockPort::new_input(self.name.clone(), key)
+    fn input(&self, key: String) -> BlockPort {
+        BlockPort::new_input(self.name.clone(), key)
     }
 
     /// Get an output port reference for linking.
-    fn output(&self, key: String) -> PyBlockPort {
-        PyBlockPort::new_output(self.name.clone(), key)
+    fn output(&self, key: String) -> BlockPort {
+        BlockPort::new_output(self.name.clone(), key)
     }
 
     #[getter]
@@ -183,11 +130,18 @@ impl PyBlockResults {
 
 /// Stored block definition for model.add_block()
 struct BlockDef {
+    build_fn: PyObject,
     name: String,
+    inputs: Py<PyDict>,
+    outputs: Py<PyDict>,
+    extract: Option<PyObject>,
 }
 
 /// Stored link definition for model.link()
-struct LinkDef;
+struct LinkDef {
+    source: BlockPort,
+    target: BlockPort,
+}
 
 /// Python wrapper for the Arco optimization model
 #[pyclass(name = "Model")]
@@ -203,6 +157,113 @@ pub struct PyModel {
 }
 
 impl PyModel {
+    /// Execute composed block solve by delegating to BlockModel infrastructure.
+    fn solve_composed(
+        &mut self,
+        py: Python<'_>,
+        _solver: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PySolveResult>> {
+        let blocks_module = py.import("arco.blocks")?;
+        let block_model_class = blocks_module.getattr("BlockModel")?;
+
+        // Create a BlockModel
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("name", "Model")?;
+        let block_model = block_model_class.call((), Some(&kwargs))?;
+
+        // Add each block to the BlockModel
+        for block_def in &self.block_defs {
+            let add_kwargs = PyDict::new(py);
+            add_kwargs.set_item("name", &block_def.name)?;
+            add_kwargs.set_item("outputs", block_def.outputs.bind(py))?;
+            if let Some(ref extract) = block_def.extract {
+                add_kwargs.set_item("extract", extract.bind(py))?;
+            }
+            add_kwargs.set_item("inputs", block_def.inputs.bind(py))?;
+
+            // Build an inputs_schema dict with all input keys (data + linked).
+            // BlockModel.validate() checks the Block's schema (inputs field) to
+            // verify that link targets are declared.
+            let schema = PyDict::new(py);
+            for key in block_def.inputs.bind(py).keys() {
+                schema.set_item(key, py.None())?;
+            }
+            // Also include keys from links targeting this block
+            for link_def in &self.link_defs {
+                if link_def.target.block_name == block_def.name {
+                    schema.set_item(&link_def.target.key, py.None())?;
+                }
+            }
+            add_kwargs.set_item("inputs_schema", schema)?;
+
+            block_model.call_method(
+                "add_block",
+                (block_def.build_fn.bind(py),),
+                Some(&add_kwargs),
+            )?;
+        }
+
+        // Add links
+        for link_def in &self.link_defs {
+            block_model.call_method1("link", (link_def.source.clone(), link_def.target.clone()))?;
+        }
+
+        // Solve the block model
+        let runs = block_model.call_method0("solve")?;
+        let runs_list = runs.cast::<PyList>()?;
+
+        // Build per-block results
+        let mut block_results = Vec::new();
+        let mut first_result: Option<Py<PySolveResult>> = None;
+
+        for run in runs_list.iter() {
+            let name: String = run.getattr("name")?.extract()?;
+            let solution_opt = run.getattr("solution")?;
+
+            if solution_opt.is_none() {
+                // Block was dropped — create a minimal error result
+                let result = PySolveResult::new(solve_failure_solution(
+                    arco_core::solver::SolverStatus::Unknown,
+                ));
+                let py_result = Py::new(py, result)?;
+                block_results.push((name, py_result));
+            } else {
+                // The solution is a PySolveResult from the sub-model's solve()
+                let result: Py<PySolveResult> = solution_opt.extract()?;
+                if first_result.is_none() {
+                    first_result = Some(result.clone_ref(py));
+                }
+                block_results.push((name, result));
+            }
+        }
+
+        // Build the BlockResults container
+        let block_results_obj: PyObject = Py::new(
+            py,
+            PyBlockResults {
+                results: block_results
+                    .iter()
+                    .map(|(n, r)| (n.clone(), r.clone_ref(py)))
+                    .collect(),
+            },
+        )?
+        .into_any();
+
+        // Get the primary solution's inner data to build a top-level SolveResult
+        let primary_inner = if let Some(ref first) = first_result {
+            let borrowed = first.borrow(py);
+            borrowed.inner().clone()
+        } else {
+            solve_failure_solution(arco_core::solver::SolverStatus::Unknown)
+        };
+
+        let result = PySolveResult::with_blocks(primary_inner, block_results_obj);
+        let py_result = Py::new(py, result)?;
+
+        self.last_solution = Some(py_result.clone_ref(py));
+        Ok(py_result)
+    }
+
     /// Compute effective bounds spec, validating binary constraints.
     #[allow(clippy::float_cmp)]
     fn effective_bounds(
@@ -407,7 +468,7 @@ impl PyModel {
         } else {
             Model::new()
         };
-        let use_xpress = solver.is_some_and(|s| s.downcast::<PyXpress>().is_ok());
+        let use_xpress = solver.is_some_and(|s| s.cast::<PyXpress>().is_ok());
         let solver_settings = extract_solver_settings(solver)?;
         Ok(PyModel {
             inner,
@@ -988,10 +1049,9 @@ impl PyModel {
         mip_gap: Option<f64>,
         verbosity: Option<u32>,
     ) -> PyResult<Py<PySolveResult>> {
+        // Composed model: delegate to block orchestration
         if !self.block_defs.is_empty() {
-            return Err(PyRuntimeError::new_err(
-                "composed block solve is not enabled in this build",
-            ));
+            return self.solve_composed(py, solver);
         }
 
         let overrides = SolveOverrides {
@@ -1494,15 +1554,20 @@ impl PyModel {
         let inputs_dict = inputs.map_or_else(|| PyDict::new(py).unbind(), |d| d.clone().unbind());
         let outputs_dict = outputs.map_or_else(|| PyDict::new(py).unbind(), |d| d.clone().unbind());
 
-        let _ = (build_fn, inputs_dict, outputs_dict, extract);
-        self.block_defs.push(BlockDef { name: name.clone() });
+        self.block_defs.push(BlockDef {
+            build_fn,
+            name: name.clone(),
+            inputs: inputs_dict,
+            outputs: outputs_dict,
+            extract,
+        });
 
         Ok(PyBlockHandle { name })
     }
 
     /// Link a block output to a block input for composed models.
     #[pyo3(signature = (source, target))]
-    fn link(&mut self, source: PyBlockPort, target: PyBlockPort) -> PyResult<()> {
+    fn link(&mut self, source: BlockPort, target: BlockPort) -> PyResult<()> {
         if source.kind != "output" {
             return Err(PyRuntimeError::new_err(
                 "link: source must be a block output port",
@@ -1513,8 +1578,7 @@ impl PyModel {
                 "link: target must be a block input port",
             ));
         }
-        let _ = (source, target);
-        self.link_defs.push(LinkDef);
+        self.link_defs.push(LinkDef { source, target });
         Ok(())
     }
 
@@ -1573,13 +1637,13 @@ fn extract_solver_settings(solver: Option<&Bound<'_, PyAny>>) -> PyResult<Solver
     let Some(solver) = solver else {
         return Ok(SolverSettings::default());
     };
-    if let Ok(highs) = solver.downcast::<PyHiGHS>() {
+    if let Ok(highs) = solver.cast::<PyHiGHS>() {
         return Ok(highs.borrow().into_super().settings.clone());
     }
-    if let Ok(xpress) = solver.downcast::<PyXpress>() {
+    if let Ok(xpress) = solver.cast::<PyXpress>() {
         return Ok(xpress.borrow().into_super().settings.clone());
     }
-    if let Ok(base) = solver.downcast::<PySolver>() {
+    if let Ok(base) = solver.cast::<PySolver>() {
         return Ok(base.borrow().settings.clone());
     }
     Err(errors::SolverTypeError::new_err(
@@ -1592,15 +1656,15 @@ fn resolve_solver_backend(solver: Option<&Bound<'_, PyAny>>) -> PyResult<SolverB
     let Some(solver) = solver else {
         return Ok(SolverBackend::HiGHS(SolverSettings::default()));
     };
-    if let Ok(xpress) = solver.downcast::<PyXpress>() {
+    if let Ok(xpress) = solver.cast::<PyXpress>() {
         let settings = xpress.borrow().into_super().settings.clone();
         return Ok(SolverBackend::Xpress(settings));
     }
-    if let Ok(highs) = solver.downcast::<PyHiGHS>() {
+    if let Ok(highs) = solver.cast::<PyHiGHS>() {
         let settings = highs.borrow().into_super().settings.clone();
         return Ok(SolverBackend::HiGHS(settings));
     }
-    if let Ok(base) = solver.downcast::<PySolver>() {
+    if let Ok(base) = solver.cast::<PySolver>() {
         let settings = base.borrow().settings.clone();
         return Ok(SolverBackend::HiGHS(settings));
     }
@@ -1663,7 +1727,6 @@ fn bounds_from_sense(sense: ComparisonSense, rhs: f64) -> Bounds {
 fn arco(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register all module classes
     m.add_class::<PyModel>()?;
-    m.add_class::<PyBlockPort>()?;
     m.add_class::<PyBlockHandle>()?;
     m.add_class::<PyBlockResults>()?;
 
@@ -1684,6 +1747,7 @@ fn arco(m: &Bound<'_, PyModule>) -> PyResult<()> {
     snapshot::register(m)?;
     logging::register(m)?;
     iterators::register(m)?;
+    add_blocks_submodule(m.py(), m)?;
 
     Ok(())
 }

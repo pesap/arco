@@ -8,7 +8,7 @@ use crate::bounds::PyBounds;
 /// A constraint returned by `add_constraint()`.
 ///
 /// Wraps a constraint ID with cached metadata (name, bounds).
-#[pyclass(name = "Constraint")]
+#[pyclass(from_py_object, name = "Constraint")]
 #[derive(Debug, Clone)]
 pub struct PyConstraint {
     pub constraint_id: u32,

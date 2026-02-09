@@ -4,7 +4,7 @@ use arco_core::{Sense, SimplifyLevel};
 use pyo3::prelude::*;
 
 /// Python enum for optimization sense
-#[pyclass(name = "Sense", eq, eq_int)]
+#[pyclass(from_py_object, name = "Sense", eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PySense {
     /// Minimize objective function
@@ -34,7 +34,7 @@ impl From<Sense> for PySense {
 }
 
 /// Python enum for expression simplification.
-#[pyclass(name = "SimplifyLevel", eq, eq_int)]
+#[pyclass(from_py_object, name = "SimplifyLevel", eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PySimplifyLevel {
     #[pyo3(name = "NONE")]

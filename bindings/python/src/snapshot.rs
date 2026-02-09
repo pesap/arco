@@ -8,7 +8,7 @@ use crate::views::{
 };
 
 /// Metadata about a model snapshot.
-#[pyclass(name = "SnapshotMetadata")]
+#[pyclass(from_py_object, name = "SnapshotMetadata")]
 #[derive(Clone)]
 pub struct PySnapshotMetadata {
     pub variables: usize,
@@ -35,7 +35,7 @@ impl PySnapshotMetadata {
 }
 
 /// A snapshot of a model's state.
-#[pyclass(name = "ModelSnapshot")]
+#[pyclass(from_py_object, name = "ModelSnapshot")]
 #[derive(Clone)]
 pub struct PyModelSnapshot {
     pub variables: Vec<PyVariableView>,

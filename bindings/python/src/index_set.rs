@@ -33,7 +33,7 @@ impl IndexMember {
 }
 
 /// A named set of indices for array dimensions.
-#[pyclass(name = "IndexSet")]
+#[pyclass(from_py_object, name = "IndexSet")]
 #[derive(Debug, Clone)]
 pub struct PyIndexSet {
     pub name: String,

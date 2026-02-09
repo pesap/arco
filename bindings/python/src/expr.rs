@@ -36,7 +36,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ExprLike {
 }
 
 /// Composable expression for objectives and constraints.
-#[pyclass(name = "Expr")]
+#[pyclass(from_py_object, name = "Expr")]
 #[derive(Debug, Clone, Default)]
 pub struct PyExpr {
     inner: Expr,
@@ -210,7 +210,7 @@ impl PyExpr {
 }
 
 /// A constraint expression (linear expression with comparison and RHS).
-#[pyclass(name = "ConstraintExpr")]
+#[pyclass(from_py_object, name = "ConstraintExpr")]
 #[derive(Clone)]
 pub struct PyConstraintExpr {
     inner: ConstraintExpr,

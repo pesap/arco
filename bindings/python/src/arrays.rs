@@ -37,7 +37,7 @@ fn resolve_axis_index(index: &Bound<'_, PyAny>, dim_size: usize) -> PyResult<Axi
         return Ok(AxisIndex::Single(resolved));
     }
     // Try slice
-    if let Ok(slice) = index.downcast::<pyo3::types::PySlice>() {
+    if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
         let indices = slice.indices(dim_size as isize)?;
         let mut result = Vec::new();
         let mut i = indices.start;
@@ -494,12 +494,12 @@ fn array_sum(
 
     let mut axes_to_sum: Vec<usize> = Vec::new();
 
-    if let Ok(single) = over.downcast::<PyIndexSet>() {
+    if let Ok(single) = over.cast::<PyIndexSet>() {
         axes_to_sum.push(core.find_axis(py, single)?);
     } else {
         let items: Vec<Bound<'_, PyAny>> = over.try_iter()?.collect::<PyResult<Vec<_>>>()?;
         for item in &items {
-            let index_set = item.downcast::<PyIndexSet>().map_err(|_| {
+            let index_set = item.cast::<PyIndexSet>().map_err(|_| {
                 ArrayTypeError::new_err("over= must be an IndexSet or tuple of IndexSets")
             })?;
             axes_to_sum.push(core.find_axis(py, index_set)?);
@@ -530,7 +530,7 @@ fn array_reduce(
     py: Python<'_>,
     rhs: &Bound<'_, PyAny>,
 ) -> PyResult<PyObject> {
-    let index_set = rhs.downcast::<PyIndexSet>().map_err(|_| {
+    let index_set = rhs.cast::<PyIndexSet>().map_err(|_| {
         ArrayTypeError::new_err(">> / @ operator requires an IndexSet on the right-hand side")
     })?;
     let axis = core.find_axis(py, index_set)?;
@@ -774,7 +774,7 @@ fn array_function(
             let k: i64 = if args.len() > 1 {
                 args.get_item(1)?.extract()?
             } else if !kwargs.is_none() {
-                let kw = kwargs.downcast::<pyo3::types::PyDict>()?;
+                let kw = kwargs.cast::<pyo3::types::PyDict>()?;
                 kw.get_item("k")?
                     .map(|v| v.extract())
                     .transpose()?
@@ -1056,7 +1056,7 @@ impl_array_ops!(PyVariableArray, {
 
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<PyObject> {
         // Try tuple indexing for multi-dimensional access
-        if let Ok(tuple) = index.downcast::<PyTuple>() {
+        if let Ok(tuple) = index.cast::<PyTuple>() {
             return self.getitem_tuple(py, tuple);
         }
 
@@ -1114,7 +1114,7 @@ impl_array_ops!(PyVariableArray, {
         }
 
         // Try slice
-        if let Ok(slice) = index.downcast::<pyo3::types::PySlice>() {
+        if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
             let len = self.core.values.len() as isize;
             let indices = slice.indices(len)?;
             let start = indices.start;
@@ -1272,7 +1272,7 @@ impl PyExprArray {
 impl_array_ops!(PyExprArray, {
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<PyObject> {
         // Try tuple indexing for multi-dimensional access
-        if let Ok(tuple) = index.downcast::<PyTuple>() {
+        if let Ok(tuple) = index.cast::<PyTuple>() {
             return self.getitem_tuple(py, tuple);
         }
 
@@ -1323,7 +1323,7 @@ impl_array_ops!(PyExprArray, {
         }
 
         // Try slice -> returns ExprArray
-        if let Ok(slice) = index.downcast::<pyo3::types::PySlice>() {
+        if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
             let len = self.core.values.len() as isize;
             let indices = slice.indices(len)?;
             let start = indices.start;

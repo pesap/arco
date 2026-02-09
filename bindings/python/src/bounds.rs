@@ -43,7 +43,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BoundsSpec {
 }
 
 /// Python wrapper for bounds (scalar or per-element array bounds).
-#[pyclass(name = "Bounds")]
+#[pyclass(from_py_object, name = "Bounds")]
 pub struct PyBounds {
     pub inner: Bounds,
     /// Per-element lower bounds as numpy array (None for scalar bounds)
@@ -179,7 +179,7 @@ impl PyBounds {
 /// x = model.add_variable(bounds=arco.NonNegativeFloat)
 /// b = model.add_variable(bounds=arco.Binary)
 /// ```
-#[pyclass(name = "BoundType", eq, eq_int)]
+#[pyclass(from_py_object, name = "BoundType", eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum PyBoundType {
