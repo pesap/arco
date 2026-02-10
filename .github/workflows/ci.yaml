@@ -64,7 +64,7 @@ jobs:
 
       - name: Build extension in development mode
         if: matrix.python-version == '3.12'
-        run: uv run --project bindings/python --with maturin maturin develop
+        run: uv run --project bindings/python --with maturin maturin develop --manifest-path bindings/python/Cargo.toml
 
       - name: Run docs doctests
         if: matrix.python-version == '3.12'
