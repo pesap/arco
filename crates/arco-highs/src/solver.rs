@@ -238,33 +238,33 @@ fn collect_objective_coefficients(
 }
 
 fn validate_solver_config(config: &SolverConfig) -> Result<(), SolverError> {
-    if let Some(limit) = config.time_limit
-        && (!limit.is_finite() || limit < 0.0)
-    {
-        return Err(SolverError::SolverSpecific(
-            "invalid solver setting: time_limit must be finite and >= 0".to_string(),
-        ));
+    if let Some(limit) = config.time_limit {
+        if !limit.is_finite() || limit < 0.0 {
+            return Err(SolverError::SolverSpecific(
+                "invalid solver setting: time_limit must be finite and >= 0".to_string(),
+            ));
+        }
     }
-    if let Some(gap) = config.mip_gap
-        && (!gap.is_finite() || gap < 0.0)
-    {
-        return Err(SolverError::SolverSpecific(
-            "invalid solver setting: mip_gap must be finite and >= 0".to_string(),
-        ));
+    if let Some(gap) = config.mip_gap {
+        if !gap.is_finite() || gap < 0.0 {
+            return Err(SolverError::SolverSpecific(
+                "invalid solver setting: mip_gap must be finite and >= 0".to_string(),
+            ));
+        }
     }
-    if let Some(tolerance) = config.tolerance
-        && (!tolerance.is_finite() || tolerance < 0.0)
-    {
-        return Err(SolverError::SolverSpecific(
-            "invalid solver setting: tolerance must be finite and >= 0".to_string(),
-        ));
+    if let Some(tolerance) = config.tolerance {
+        if !tolerance.is_finite() || tolerance < 0.0 {
+            return Err(SolverError::SolverSpecific(
+                "invalid solver setting: tolerance must be finite and >= 0".to_string(),
+            ));
+        }
     }
-    if let Some(threads) = config.threads
-        && threads == 0
-    {
-        return Err(SolverError::SolverSpecific(
-            "invalid solver setting: threads must be >= 1".to_string(),
-        ));
+    if let Some(threads) = config.threads {
+        if threads == 0 {
+            return Err(SolverError::SolverSpecific(
+                "invalid solver setting: threads must be >= 1".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -837,5 +837,29 @@ mod tests {
         assert!(outcome.is_ok(), "solve_with_config must not panic");
         let result = outcome.expect("caught panic");
         assert!(result.is_err(), "invalid mip gap should return error");
+    }
+
+    #[test]
+    fn test_solve_with_negative_tolerance_does_not_panic() {
+        let model = build_single_variable_model();
+        let mut solver = Solver::new(model).expect("solver");
+        let config = SolverConfig::new().with_tolerance(-1e-9);
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| solver.solve_with_config(&config)));
+        assert!(outcome.is_ok(), "solve_with_config must not panic");
+        let result = outcome.expect("caught panic");
+        assert!(result.is_err(), "invalid tolerance should return error");
+    }
+
+    #[test]
+    fn test_solve_with_zero_threads_does_not_panic() {
+        let model = build_single_variable_model();
+        let mut solver = Solver::new(model).expect("solver");
+        let config = SolverConfig::new().with_threads(0);
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| solver.solve_with_config(&config)));
+        assert!(outcome.is_ok(), "solve_with_config must not panic");
+        let result = outcome.expect("caught panic");
+        assert!(result.is_err(), "zero threads should return error");
     }
 }
