@@ -1,13 +1,13 @@
 # Known Problems
 
-This reference page defines Arco's canonical set of known optimization
-problems. Each section includes:
+This reference page defines Arco's canonical set of known optimization problems.
+Each section includes:
 
 - Mathematical formulation.
 - A runnable Arco model.
 - A known solution check in `python doctest` format.
 
-## 1. Simple LP
+## Simple LP
 
 ```math
 \begin{align}
@@ -36,7 +36,7 @@ True
 4.0
 ```
 
-## 2. Production Mix
+## Production Mix
 
 ```math
 \begin{align}
@@ -69,7 +69,7 @@ True
 60.0
 ```
 
-## 3. A x = b Feasibility
+## $A x = b$ Feasibility
 
 ```math
 \begin{align}
@@ -103,7 +103,7 @@ True
 (1.0, 2.0)
 ```
 
-## 4. 0-1 Knapsack
+## 0-1 Knapsack
 
 ```math
 \begin{align}
@@ -137,7 +137,7 @@ True
 (1.0, 0.0, 1.0)
 ```
 
-## 5. Network Flow (numpy integration)
+## Network Flow (numpy integration)
 
 ```math
 \begin{align}
@@ -174,7 +174,7 @@ True
 True
 ```
 
-## 6. Unit Commitment
+## Unit Commitment
 
 ```math
 \begin{align}
@@ -213,7 +213,7 @@ True
 (1.0, 1.0)
 ```
 
-## 7. Network Design
+## Network Design
 
 ```math
 \begin{align}
@@ -262,7 +262,7 @@ True
 True
 ```
 
-## 8. Energy Storage Dispatch
+## Energy Storage Dispatch
 
 ```math
 \begin{align}
@@ -307,7 +307,7 @@ True
 (1.0, 1.0)
 ```
 
-## 9. N-Queens
+## N-Queens
 
 ```math
 \begin{align}
