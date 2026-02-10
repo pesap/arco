@@ -36,7 +36,12 @@ class DoctestBlock:
 
 
 def _iter_markdown_files() -> Iterable[Path]:
-    return sorted(DOCS_DIR.rglob("*.md"))
+    markdown_files = DOCS_DIR.rglob("*.md")
+    return sorted(
+        file_path
+        for file_path in markdown_files
+        if EXCLUDED_DOC_DIRS.isdisjoint(file_path.relative_to(DOCS_DIR).parts)
+    )
 
 
 def _extract_doctest_blocks(*, file_path: Path) -> list[DoctestBlock]:

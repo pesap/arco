@@ -2,7 +2,7 @@
 #   just              — type-check workspace (default)
 #   just fmt          — format Rust code
 #   just test         — run Rust tests
-#   just py-test      — build extension + run Python tests
+#   just py-test      — build extension + run docs doctests
 #   just ci           — full CI pipeline
 #   just --list       — show all recipes
 #
@@ -75,12 +75,12 @@ py-build:
     {{ maturin }} build --release
 
 [group("python")]
-[doc("Build dev extension then run Python tests")]
+[doc("Build dev extension then run docs doctests")]
 py-test: py-dev
     uv run --project bindings/python --with pytest --with numpy pytest scripts/test_docs_doctest.py
 
 [group("python")]
-[doc("Build dev extension then run documentation doctests")]
+[doc("Build dev extension then run docs doctests (verbose)")]
 docs-test: py-dev
     uv run --project bindings/python --with pytest --with numpy pytest scripts/test_docs_doctest.py -v
 
