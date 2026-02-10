@@ -1,27 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import argparse
 import glob
-import importlib
 from pathlib import Path
 import subprocess
 import sys
 from typing import Sequence
 
 
-@dataclass(frozen=True, slots=True)
-class SmokeConfig:
-    artifact_glob: str
-    import_name: str
-    variable_name: str
-
-
-def _parse_args(*, argv: Sequence[str]) -> SmokeConfig:
+def _parse_args(*, argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Install a built Python package artifact and run a minimal import/runtime smoke test."
-        )
+        description="Install a built artifact with uv and validate import."
     )
     parser.add_argument(
         "--artifact-glob",
@@ -33,18 +22,7 @@ def _parse_args(*, argv: Sequence[str]) -> SmokeConfig:
         default="arco",
         help="Top-level import to validate after installation.",
     )
-    parser.add_argument(
-        "--variable-name",
-        default="x",
-        help="Variable name used in the model construction smoke check.",
-    )
-
-    args = parser.parse_args(argv)
-    return SmokeConfig(
-        artifact_glob=args.artifact_glob,
-        import_name=args.import_name,
-        variable_name=args.variable_name,
-    )
+    return parser.parse_args(argv)
 
 
 def _resolve_artifacts(*, pattern: str) -> list[Path]:
@@ -54,27 +32,37 @@ def _resolve_artifacts(*, pattern: str) -> list[Path]:
     return sorted(artifacts)
 
 
-def _install_artifacts(*, artifacts: Sequence[Path]) -> None:
-    subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--force-reinstall", *[str(path) for path in artifacts]]
+def _run_uv_smoke(*, python_executable: Path, artifacts: Sequence[Path], import_name: str) -> None:
+    command = [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--python",
+        str(python_executable),
+    ]
+    for artifact in artifacts:
+        command.extend(["--with", str(artifact)])
+    command.extend(
+        [
+            "python",
+            "-c",
+            f"import importlib; importlib.import_module({import_name!r})",
+        ]
     )
-
-
-def _run_import_and_model_smoke(*, import_name: str, variable_name: str) -> None:
-    module = importlib.import_module(import_name)
-    model = module.Model()
-    model.add_variable(bounds=module.Bounds(lower=0.0, upper=1.0), name=variable_name)
+    subprocess.check_call(command)
 
 
 def main(*, argv: Sequence[str]) -> int:
-    config = _parse_args(argv=argv)
-    artifacts = _resolve_artifacts(pattern=config.artifact_glob)
-    _install_artifacts(artifacts=artifacts)
-    _run_import_and_model_smoke(
-        import_name=config.import_name,
-        variable_name=config.variable_name,
+    args = _parse_args(argv=argv)
+    artifacts = _resolve_artifacts(pattern=args.artifact_glob)
+    python_executable = Path(sys.executable)
+    _run_uv_smoke(
+        python_executable=python_executable,
+        artifacts=artifacts,
+        import_name=args.import_name,
     )
-    print(f"smoke-ok import={config.import_name} artifacts={len(artifacts)}")
+    print(f"smoke-ok import={args.import_name} artifacts={len(artifacts)}")
     return 0
 
 
