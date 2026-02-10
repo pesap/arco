@@ -1,14 +1,13 @@
-> [!warning]
-> Arco is built primarily for internal use within our organization. You are
-> welcome to try it, but we make no guarantees about API stability or robustness
-> at this stage. For battle-tested alternatives, consider
+> [!warning] Arco is built primarily for internal use within our organization.
+> You are welcome to try it, but we make no guarantees about API stability or
+> robustness at this stage. For battle-tested alternatives, consider
 > [Pyomo](https://www.pyomo.org/) (Python) or [JuMP](https://jump.dev/) (Julia).
 
 <div align="center">
 
 <h1>ARCO</h1>
 
-<p><strong>A memory-smart optimization library for hard problems on constrained hardware.</strong></p>
+<p><strong>A memory-smart optimization library for solving problems on constrained hardware.</strong></p>
 
 <p>
   <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/rust-1.85-brightgreen"></a>
@@ -162,8 +161,8 @@ result = solver.solve(model)
 
 ## Benchmarking
 
-Use the `arco-bench` CLI to run model benchmarks, inspect artifacts, and
-compare runs.
+Use the `arco-bench` CLI to run model benchmarks, inspect artifacts, and compare
+runs.
 
 ```bash
 # Run default model-build scenarios
