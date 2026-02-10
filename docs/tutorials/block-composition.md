@@ -125,6 +125,10 @@ True
 True
 ```
 
+For composed models, inspect `result.blocks[...]` for block-level objective
+values and vectors. The top-level `result.status` is an aggregate over all
+blocks.
+
 ## Validation guarantees
 
 Arco validates the typed block contract at registration and link time:

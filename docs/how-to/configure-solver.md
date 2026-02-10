@@ -87,6 +87,9 @@ backend uses its own default.
 > [!NOTE]
 > Not every backend interprets every setting. If a setting does not apply to the
 > chosen backend it is silently ignored.
+>
+> `time_limit`, `mip_gap`, and `tolerance` must be finite and non-negative.
+> `threads` must be at least `1`.
 
 ## Pass settings directly to solve
 
