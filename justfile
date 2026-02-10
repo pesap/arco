@@ -63,6 +63,24 @@ py-sync:
     uv sync
 
 [group("python")]
+[doc("Format Python code with ruff")]
+[working-directory: "bindings/python"]
+py-fmt:
+    uv run ruff format --verbose
+
+[group("python")]
+[doc("Lint Python code with ruff (auto-fix)")]
+[working-directory: "bindings/python"]
+py-lint:
+    uv run ruff check --fix --config=pyproject.toml
+
+[group("python")]
+[doc("Type-check Python bindings")]
+[working-directory: "bindings/python"]
+py-type:
+    uv run ty check src/
+
+[group("python")]
 [doc("Build the Python extension in-place (dev mode)")]
 [working-directory: "bindings/python"]
 py-dev:
