@@ -1,0 +1,171 @@
+name: Release and Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating GitHub releases/tags.
+      pull-requests: write # Required for opening/updating release PRs.
+    outputs:
+      python_released: ${{ steps.release.outputs['bindings/python--release_created'] }}
+      python_tag: ${{ steps.release.outputs['bindings/python--tag_name'] }}
+      python_version: ${{ steps.release.outputs['bindings/python--version'] }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build-wheels:
+    name: Build wheel ${{ matrix.os }} / py${{ matrix.python-version }}
+    needs: release-please
+    if: needs.release-please.outputs.python_released == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.release-please.outputs.python_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        with:
+          toolchain: "1.85"
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+
+      - name: Build wheel
+        run:
+          uv run --with maturin maturin build --release --manifest-path
+          bindings/python/Cargo.toml --out dist --interpreter python
+
+      - name: Smoke test wheel install and import
+        run:
+          uv run python scripts/python_package_smoke.py --artifact-glob
+          "dist/*.whl"
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*.whl
+
+  build-sdist:
+    name: Build sdist
+    needs: release-please
+    if: needs.release-please.outputs.python_released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.release-please.outputs.python_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        with:
+          toolchain: "1.85"
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+
+      - name: Build source distribution
+        run:
+          uv run --with maturin maturin sdist --manifest-path
+          bindings/python/Cargo.toml --out dist
+
+      - name: Smoke test source install and import
+        run:
+          uv run python scripts/python_package_smoke.py --artifact-glob
+          "dist/*.tar.gz"
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  attach-release-artifacts:
+    name: Attach Artifacts to GitHub Release
+    needs:
+      - release-please
+      - build-wheels
+      - build-sdist
+    if: needs.release-please.outputs.python_released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to upload wheel/sdist files to the GitHub release.
+    steps:
+      - name: Download wheel and sdist artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.python_tag }}
+        run: gh release upload "$RELEASE_TAG" dist/* --clobber
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs:
+      - release-please
+      - build-wheels
+      - build-sdist
+      - attach-release-artifacts
+    if: needs.release-please.outputs.python_released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for PyPI Trusted Publishing (OIDC).
+    environment:
+      name: pypi
+      url: https://pypi.org/p/arco
+    steps:
+      - name: Download wheel and sdist artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # release/v1
+        with:
+          packages-dir: dist
