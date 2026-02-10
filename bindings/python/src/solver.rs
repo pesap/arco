@@ -26,6 +26,15 @@ pub struct SolverSettings {
 }
 
 impl SolverSettings {
+    fn ensure_non_negative_finite(name: &str, value: f64) -> PyResult<()> {
+        if !value.is_finite() || value < 0.0 {
+            return Err(SolverInvalidSettingError::new_err(format!(
+                "{name} must be finite and >= 0"
+            )));
+        }
+        Ok(())
+    }
+
     pub fn new(
         presolve: Option<bool>,
         threads: Option<u32>,
@@ -41,9 +50,13 @@ impl SolverSettings {
             }
         }
         if let Some(tolerance) = tolerance {
-            if tolerance < 0.0 {
-                return Err(SolverInvalidSettingError::new_err("tolerance must be >= 0"));
-            }
+            Self::ensure_non_negative_finite("tolerance", tolerance)?;
+        }
+        if let Some(limit) = time_limit {
+            Self::ensure_non_negative_finite("time_limit", limit)?;
+        }
+        if let Some(gap) = mip_gap {
+            Self::ensure_non_negative_finite("mip_gap", gap)?;
         }
         Ok(Self {
             presolve,
@@ -56,16 +69,16 @@ impl SolverSettings {
         })
     }
 
-    pub fn with_overrides(&self, overrides: SolveOverrides) -> Self {
-        Self {
-            presolve: self.presolve,
-            threads: self.threads,
-            tolerance: self.tolerance,
-            time_limit: overrides.time_limit.or(self.time_limit),
-            mip_gap: overrides.mip_gap.or(self.mip_gap),
-            verbosity: overrides.verbosity.or(self.verbosity),
-            log_to_console: overrides.log_to_console.or(self.log_to_console),
-        }
+    pub fn with_overrides(&self, overrides: SolveOverrides) -> PyResult<Self> {
+        Self::new(
+            self.presolve,
+            self.threads,
+            self.tolerance,
+            overrides.time_limit.or(self.time_limit),
+            overrides.mip_gap.or(self.mip_gap),
+            overrides.verbosity.or(self.verbosity),
+            overrides.log_to_console.or(self.log_to_console),
+        )
     }
 
     pub fn apply_highs(&self, solver: &mut arco_highs::Solver) {

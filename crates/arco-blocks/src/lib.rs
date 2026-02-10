@@ -831,7 +831,16 @@ impl BlockModel {
         Ok(())
     }
 
-    fn solve(&self, py: Python<'_>) -> PyResult<Vec<Py<BlockRun>>> {
+    #[pyo3(signature = (*, solver=None, log_to_console=None, time_limit=None, mip_gap=None, verbosity=None))]
+    fn solve(
+        &self,
+        py: Python<'_>,
+        solver: Option<PyObject>,
+        log_to_console: Option<bool>,
+        time_limit: Option<f64>,
+        mip_gap: Option<f64>,
+        verbosity: Option<u32>,
+    ) -> PyResult<Vec<Py<BlockRun>>> {
         self.validate(py)?;
 
         // Build the block DAG for parallel execution
@@ -949,11 +958,72 @@ impl BlockModel {
                         });
                     if let Some(hints) = hints {
                         let kwargs = PyDict::new(py);
+                        if let Some(ref solver) = solver {
+                            kwargs.set_item("solver", solver.clone_ref(py))?;
+                        }
+                        if let Some(enabled) = log_to_console {
+                            kwargs.set_item("log_to_console", enabled)?;
+                        }
+                        if let Some(limit) = time_limit {
+                            kwargs.set_item("time_limit", limit)?;
+                        }
+                        if let Some(gap) = mip_gap {
+                            kwargs.set_item("mip_gap", gap)?;
+                        }
+                        if let Some(level) = verbosity {
+                            kwargs.set_item("verbosity", level)?;
+                        }
                         kwargs.set_item("primal_start", hints)?;
+                        model.call_method("solve", (), Some(&kwargs))?
+                    } else if solver.is_some()
+                        || log_to_console.is_some()
+                        || time_limit.is_some()
+                        || mip_gap.is_some()
+                        || verbosity.is_some()
+                    {
+                        let kwargs = PyDict::new(py);
+                        if let Some(ref solver) = solver {
+                            kwargs.set_item("solver", solver.clone_ref(py))?;
+                        }
+                        if let Some(enabled) = log_to_console {
+                            kwargs.set_item("log_to_console", enabled)?;
+                        }
+                        if let Some(limit) = time_limit {
+                            kwargs.set_item("time_limit", limit)?;
+                        }
+                        if let Some(gap) = mip_gap {
+                            kwargs.set_item("mip_gap", gap)?;
+                        }
+                        if let Some(level) = verbosity {
+                            kwargs.set_item("verbosity", level)?;
+                        }
                         model.call_method("solve", (), Some(&kwargs))?
                     } else {
                         model.call_method0("solve")?
                     }
+                } else if solver.is_some()
+                    || log_to_console.is_some()
+                    || time_limit.is_some()
+                    || mip_gap.is_some()
+                    || verbosity.is_some()
+                {
+                    let kwargs = PyDict::new(py);
+                    if let Some(ref solver) = solver {
+                        kwargs.set_item("solver", solver.clone_ref(py))?;
+                    }
+                    if let Some(enabled) = log_to_console {
+                        kwargs.set_item("log_to_console", enabled)?;
+                    }
+                    if let Some(limit) = time_limit {
+                        kwargs.set_item("time_limit", limit)?;
+                    }
+                    if let Some(gap) = mip_gap {
+                        kwargs.set_item("mip_gap", gap)?;
+                    }
+                    if let Some(level) = verbosity {
+                        kwargs.set_item("verbosity", level)?;
+                    }
+                    model.call_method("solve", (), Some(&kwargs))?
                 } else {
                     model.call_method0("solve")?
                 };

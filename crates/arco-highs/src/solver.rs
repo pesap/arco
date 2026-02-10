@@ -237,7 +237,43 @@ fn collect_objective_coefficients(
     Ok((sense, objective_coeffs))
 }
 
-fn apply_solver_config(highs_model: &mut HighsModel, config: &SolverConfig) {
+fn validate_solver_config(config: &SolverConfig) -> Result<(), SolverError> {
+    if let Some(limit) = config.time_limit
+        && (!limit.is_finite() || limit < 0.0)
+    {
+        return Err(SolverError::SolverSpecific(
+            "invalid solver setting: time_limit must be finite and >= 0".to_string(),
+        ));
+    }
+    if let Some(gap) = config.mip_gap
+        && (!gap.is_finite() || gap < 0.0)
+    {
+        return Err(SolverError::SolverSpecific(
+            "invalid solver setting: mip_gap must be finite and >= 0".to_string(),
+        ));
+    }
+    if let Some(tolerance) = config.tolerance
+        && (!tolerance.is_finite() || tolerance < 0.0)
+    {
+        return Err(SolverError::SolverSpecific(
+            "invalid solver setting: tolerance must be finite and >= 0".to_string(),
+        ));
+    }
+    if let Some(threads) = config.threads
+        && threads == 0
+    {
+        return Err(SolverError::SolverSpecific(
+            "invalid solver setting: threads must be >= 1".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn apply_solver_config(
+    highs_model: &mut HighsModel,
+    config: &SolverConfig,
+) -> Result<(), SolverError> {
+    validate_solver_config(config)?;
     highs_model.set_log_to_console(config.log_to_console.unwrap_or(false));
 
     if let Some(limit) = config.time_limit {
@@ -263,6 +299,7 @@ fn apply_solver_config(highs_model: &mut HighsModel, config: &SolverConfig) {
         );
         highs_model.set_option("dual_feasibility_tolerance", HighsOption::Float(tolerance));
     }
+    Ok(())
 }
 
 fn add_variables_to_highs(
@@ -508,7 +545,7 @@ fn solve_model(
 
     // Create HiGHS model
     let mut highs_model = HighsModel::new();
-    apply_solver_config(&mut highs_model, config);
+    apply_solver_config(&mut highs_model, config)?;
     trace!(
         component = "solver",
         operation = "init_highs",
@@ -698,6 +735,9 @@ fn default_primal_value(lower: f64, upper: f64) -> f64 {
 mod tests {
     use super::*;
     use arco_core::solver::SolverStatus as CoreSolverStatus;
+    use arco_core::types::Bounds;
+    use arco_core::{Objective, Variable};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     #[test]
     fn test_solver_error_display_empty_model() {
@@ -759,5 +799,43 @@ mod tests {
 
         // Unbounded
         assert_eq!(default_primal_value(f64::NEG_INFINITY, f64::INFINITY), 0.0);
+    }
+
+    fn build_single_variable_model() -> Model {
+        let mut model = Model::new();
+        let x = model
+            .add_variable(Variable::continuous(Bounds::new(0.0, f64::INFINITY)))
+            .expect("variable");
+        model
+            .set_objective(Objective {
+                sense: Some(Sense::Minimize),
+                terms: vec![(x, 1.0)],
+            })
+            .expect("objective");
+        model
+    }
+
+    #[test]
+    fn test_solve_with_negative_time_limit_does_not_panic() {
+        let model = build_single_variable_model();
+        let mut solver = Solver::new(model).expect("solver");
+        let config = SolverConfig::new().with_time_limit(-1.0);
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| solver.solve_with_config(&config)));
+        assert!(outcome.is_ok(), "solve_with_config must not panic");
+        let result = outcome.expect("caught panic");
+        assert!(result.is_err(), "invalid time limit should return error");
+    }
+
+    #[test]
+    fn test_solve_with_negative_mip_gap_does_not_panic() {
+        let model = build_single_variable_model();
+        let mut solver = Solver::new(model).expect("solver");
+        let config = SolverConfig::new().with_mip_gap(-0.1);
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| solver.solve_with_config(&config)));
+        assert!(outcome.is_ok(), "solve_with_config must not panic");
+        let result = outcome.expect("caught panic");
+        assert!(result.is_err(), "invalid mip gap should return error");
     }
 }

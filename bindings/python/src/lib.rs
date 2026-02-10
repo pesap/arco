@@ -880,7 +880,15 @@ impl PyModel {
     ) -> PyResult<Py<PySolveResult>> {
         // Composed model: delegate to block orchestration
         if !self.block_defs.is_empty() {
-            return self.solve_composed(py, solver);
+            return self.solve_composed(
+                py,
+                solver,
+                log_to_console,
+                primal_start,
+                time_limit,
+                mip_gap,
+                verbosity,
+            );
         }
 
         let overrides = SolveOverrides {
@@ -909,7 +917,7 @@ impl PyModel {
                 "Xpress backend is not enabled in this build",
             )),
             SolverBackend::HiGHS(settings) => {
-                let settings = settings.with_overrides(overrides);
+                let settings = settings.with_overrides(overrides)?;
                 let mut highs = arco_highs::Solver::new(self.inner.clone())
                     .map_err(errors::solver_error_to_py)?;
                 settings.apply_highs(&mut highs);
@@ -1356,6 +1364,18 @@ mod tests {
     #[test]
     fn solver_settings_rejects_negative_tolerance() {
         let result = SolverSettings::new(None, None, Some(-0.5), None, None, None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn solver_settings_rejects_negative_time_limit() {
+        let result = SolverSettings::new(None, None, None, Some(-1.0), None, None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn solver_settings_rejects_negative_mip_gap() {
+        let result = SolverSettings::new(None, None, None, None, Some(-0.1), None, None);
         assert!(result.is_err());
     }
 

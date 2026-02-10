@@ -81,7 +81,7 @@ impl Model {
         for idx in 0..num_variables {
             let lower = var_lower[idx] as f64;
             let upper = var_upper[idx] as f64;
-            if lower > upper {
+            if lower.is_nan() || upper.is_nan() || lower > upper {
                 return Err(ModelError::InvalidVariableBounds { lower, upper });
             }
             model.push_variable(Variable {
@@ -94,7 +94,7 @@ impl Model {
         for idx in 0..num_constraints {
             let lower = con_lower[idx] as f64;
             let upper = con_upper[idx] as f64;
-            if lower > upper {
+            if lower.is_nan() || upper.is_nan() || lower > upper {
                 return Err(ModelError::InvalidConstraintBounds { lower, upper });
             }
             model.constraints.push(Constraint {
@@ -121,7 +121,15 @@ impl Model {
                         reason: format!("row index out of bounds at position {idx}"),
                     });
                 }
-                column.push((ConstraintId::new(row as u32), values[idx] as f64));
+                let coefficient = values[idx] as f64;
+                if !coefficient.is_finite() {
+                    return Err(ModelError::InvalidCscData {
+                        reason: format!(
+                            "coefficient at position {idx} must be finite (got {coefficient})"
+                        ),
+                    });
+                }
+                column.push((ConstraintId::new(row as u32), coefficient));
             }
             model.columns.insert(
                 VariableId::new(col as u32),

@@ -9,6 +9,7 @@ pub(crate) fn highs_to_core_status(status: HighsStatus) -> CoreSolverStatus {
         HighsStatus::Optimal => CoreSolverStatus::Optimal,
         HighsStatus::Infeasible => CoreSolverStatus::Infeasible,
         HighsStatus::Unbounded => CoreSolverStatus::Unbounded,
+        HighsStatus::UnboundedOrInfeasible => CoreSolverStatus::Unknown,
         HighsStatus::ReachedTimeLimit => CoreSolverStatus::TimeLimit,
         HighsStatus::ReachedIterationLimit => CoreSolverStatus::IterationLimit,
         HighsStatus::Unknown => CoreSolverStatus::Unknown,
@@ -35,6 +36,7 @@ pub(crate) fn highs_status_string(status: HighsStatus) -> &'static str {
         HighsStatus::Optimal => "optimal",
         HighsStatus::Infeasible => "infeasible",
         HighsStatus::Unbounded => "unbounded",
+        HighsStatus::UnboundedOrInfeasible => "unbounded_or_infeasible",
         HighsStatus::ReachedTimeLimit => "time_limit",
         HighsStatus::ReachedIterationLimit => "iteration_limit",
         HighsStatus::Unknown => "unknown",
@@ -89,6 +91,15 @@ mod tests {
         assert!(highs_has_solution(HighsStatus::Optimal));
         assert!(highs_has_solution(HighsStatus::ReachedTimeLimit));
         assert!(!highs_has_solution(HighsStatus::Infeasible));
+        assert!(!highs_has_solution(HighsStatus::UnboundedOrInfeasible));
+        assert_eq!(
+            highs_to_core_status(HighsStatus::UnboundedOrInfeasible),
+            CoreSolverStatus::Unknown
+        );
+        assert_eq!(
+            highs_status_string(HighsStatus::UnboundedOrInfeasible),
+            "unbounded_or_infeasible"
+        );
         assert_eq!(highs_status_string(HighsStatus::Unknown), "unknown");
     }
 }

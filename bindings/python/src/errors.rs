@@ -300,6 +300,9 @@ pub fn model_error_to_py(e: arco_core::model::ModelError) -> PyErr {
             SlackInvalidPenaltyError::new_err(msg)
         }
         arco_core::model::ModelError::InvalidCscData { .. } => CscInvalidDataError::new_err(msg),
+        arco_core::model::ModelError::InvalidCoefficient { .. } => {
+            ExprCoefficientError::new_err(msg)
+        }
     }
 }
 

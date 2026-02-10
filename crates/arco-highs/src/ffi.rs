@@ -26,6 +26,8 @@ pub enum HighsStatus {
     Infeasible,
     /// Problem is unbounded
     Unbounded,
+    /// HiGHS could not disambiguate between unbounded and infeasible
+    UnboundedOrInfeasible,
     /// Solver reached time limit (may have feasible solution)
     ReachedTimeLimit,
     /// Solver reached iteration limit (may have feasible solution)
@@ -598,9 +600,8 @@ fn map_status(status: HighsModelStatus) -> HighsStatus {
     match status {
         HighsModelStatus::Optimal => HighsStatus::Optimal,
         HighsModelStatus::Infeasible => HighsStatus::Infeasible,
-        HighsModelStatus::Unbounded | HighsModelStatus::UnboundedOrInfeasible => {
-            HighsStatus::Unbounded
-        }
+        HighsModelStatus::Unbounded => HighsStatus::Unbounded,
+        HighsModelStatus::UnboundedOrInfeasible => HighsStatus::UnboundedOrInfeasible,
         HighsModelStatus::ReachedTimeLimit => HighsStatus::ReachedTimeLimit,
         HighsModelStatus::ReachedIterationLimit => HighsStatus::ReachedIterationLimit,
         _ => HighsStatus::Unknown,

@@ -236,3 +236,24 @@ fn test_from_csc_only_stores_non_empty_columns() {
             .is_empty()
     );
 }
+
+#[test]
+fn test_from_csc_rejects_non_finite_values() {
+    let err = Model::from_csc(
+        CscInput {
+            num_constraints: 1,
+            num_variables: 1,
+            col_ptrs: &[0, 1],
+            row_indices: &[0],
+            values: &[f32::INFINITY],
+            var_lower: &[0.0_f32],
+            var_upper: &[1.0_f32],
+            con_lower: &[0.0_f32],
+            con_upper: &[1.0_f32],
+            is_integer: &[false],
+        },
+        SimplifyLevel::None,
+    )
+    .expect_err("expected invalid CSC error");
+    assert!(matches!(err, ModelError::InvalidCscData { .. }));
+}

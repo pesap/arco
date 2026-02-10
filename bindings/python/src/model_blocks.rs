@@ -1,5 +1,6 @@
 use crate::{PyModel, PyObject, PySolveResult};
 use arco_blocks::BlockPort;
+use arco_core::solver::SolverStatus;
 use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
@@ -277,8 +278,19 @@ impl PyModel {
     pub(crate) fn solve_composed(
         &mut self,
         py: Python<'_>,
-        _solver: Option<&Bound<'_, PyAny>>,
+        solver: Option<&Bound<'_, PyAny>>,
+        log_to_console: Option<bool>,
+        primal_start: Option<Vec<(u32, f64)>>,
+        time_limit: Option<f64>,
+        mip_gap: Option<f64>,
+        verbosity: Option<u32>,
     ) -> PyResult<Py<PySolveResult>> {
+        if primal_start.is_some() {
+            return Err(PyRuntimeError::new_err(
+                "primal_start is not supported for composed models",
+            ));
+        }
+
         let blocks_module = py.import("arco.blocks")?;
         let block_model_class = blocks_module.getattr("BlockModel")?;
 
@@ -309,12 +321,36 @@ impl PyModel {
         }
 
         // Solve the block model
-        let runs = block_model.call_method0("solve")?;
+        let runs = if solver.is_some()
+            || log_to_console.is_some()
+            || time_limit.is_some()
+            || mip_gap.is_some()
+            || verbosity.is_some()
+        {
+            let solve_kwargs = PyDict::new(py);
+            if let Some(solver) = solver {
+                solve_kwargs.set_item("solver", solver)?;
+            }
+            if let Some(enabled) = log_to_console {
+                solve_kwargs.set_item("log_to_console", enabled)?;
+            }
+            if let Some(limit) = time_limit {
+                solve_kwargs.set_item("time_limit", limit)?;
+            }
+            if let Some(gap) = mip_gap {
+                solve_kwargs.set_item("mip_gap", gap)?;
+            }
+            if let Some(level) = verbosity {
+                solve_kwargs.set_item("verbosity", level)?;
+            }
+            block_model.call_method("solve", (), Some(&solve_kwargs))?
+        } else {
+            block_model.call_method0("solve")?
+        };
         let runs_list = runs.cast::<PyList>()?;
 
         // Build per-block results
         let mut block_results = Vec::new();
-        let mut first_result: Option<Py<PySolveResult>> = None;
 
         for run in runs_list.iter() {
             let name: String = run.getattr("name")?.extract()?;
@@ -330,9 +366,6 @@ impl PyModel {
             } else {
                 // The solution is a PySolveResult from the sub-model's solve()
                 let result: Py<PySolveResult> = solution_opt.extract()?;
-                if first_result.is_none() {
-                    first_result = Some(result.clone_ref(py));
-                }
                 block_results.push((name, result));
             }
         }
@@ -349,12 +382,16 @@ impl PyModel {
         )?
         .into_any();
 
-        // Get the primary solution's inner data to build a top-level SolveResult
-        let primary_inner = if let Some(ref first) = first_result {
-            let borrowed = first.borrow(py);
+        // Derive a conservative top-level status from all block results.
+        let primary_inner = if block_results.len() == 1 {
+            let borrowed = block_results[0].1.borrow(py);
             borrowed.inner().clone()
         } else {
-            crate::solve_failure_solution(arco_core::solver::SolverStatus::Unknown)
+            let statuses = block_results
+                .iter()
+                .map(|(_, result)| result.borrow(py).inner().status)
+                .collect::<Vec<_>>();
+            crate::solve_failure_solution(aggregate_block_status(&statuses))
         };
 
         let result = PySolveResult::with_blocks(primary_inner, block_results_obj);
@@ -362,6 +399,69 @@ impl PyModel {
 
         self.last_solution = Some(py_result.clone_ref(py));
         Ok(py_result)
+    }
+}
+
+fn aggregate_block_status(statuses: &[SolverStatus]) -> SolverStatus {
+    if statuses.is_empty() {
+        return SolverStatus::Unknown;
+    }
+    if statuses
+        .iter()
+        .all(|status| *status == SolverStatus::Optimal)
+    {
+        return SolverStatus::Optimal;
+    }
+
+    let has_infeasible = statuses.contains(&SolverStatus::Infeasible);
+    let has_unbounded = statuses.contains(&SolverStatus::Unbounded);
+    if has_infeasible && has_unbounded {
+        return SolverStatus::Unknown;
+    }
+    if has_infeasible {
+        return SolverStatus::Infeasible;
+    }
+    if has_unbounded {
+        return SolverStatus::Unbounded;
+    }
+    if statuses.contains(&SolverStatus::Unknown) {
+        return SolverStatus::Unknown;
+    }
+
+    let has_time_limit = statuses.contains(&SolverStatus::TimeLimit);
+    let has_iteration_limit = statuses.contains(&SolverStatus::IterationLimit);
+    if has_time_limit && has_iteration_limit {
+        SolverStatus::Unknown
+    } else if has_time_limit {
+        SolverStatus::TimeLimit
+    } else if has_iteration_limit {
+        SolverStatus::IterationLimit
+    } else {
+        SolverStatus::Unknown
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::aggregate_block_status;
+    use arco_core::solver::SolverStatus;
+
+    #[test]
+    fn aggregate_returns_optimal_when_all_blocks_optimal() {
+        let status = aggregate_block_status(&[SolverStatus::Optimal, SolverStatus::Optimal]);
+        assert_eq!(status, SolverStatus::Optimal);
+    }
+
+    #[test]
+    fn aggregate_prioritizes_infeasible_over_limits() {
+        let status = aggregate_block_status(&[SolverStatus::Optimal, SolverStatus::Infeasible]);
+        assert_eq!(status, SolverStatus::Infeasible);
+    }
+
+    #[test]
+    fn aggregate_reports_unknown_on_conflicting_terminal_statuses() {
+        let status = aggregate_block_status(&[SolverStatus::Infeasible, SolverStatus::Unbounded]);
+        assert_eq!(status, SolverStatus::Unknown);
     }
 }
 

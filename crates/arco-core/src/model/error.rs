@@ -23,6 +23,8 @@ pub enum ModelError {
     InvalidSlackPenalty { penalty: f64 },
     /// Invalid CSC ingest data
     InvalidCscData { reason: String },
+    /// Non-finite matrix/objective coefficient
+    InvalidCoefficient { coefficient: f64 },
 }
 
 impl ModelError {
@@ -38,6 +40,7 @@ impl ModelError {
             ModelError::MultipleObjectives => "OBJECTIVE_ALREADY_SET",
             ModelError::InvalidSlackPenalty { .. } => "SLACK_INVALID_PENALTY",
             ModelError::InvalidCscData { .. } => "CSC_INVALID_DATA",
+            ModelError::InvalidCoefficient { .. } => "COEFFICIENT_INVALID",
         }
     }
 }
@@ -89,6 +92,12 @@ impl std::fmt::Display for ModelError {
             ModelError::InvalidCscData { reason } => {
                 write!(f, "[{}] CSC ingest invalid: {}", self.code(), reason)
             }
+            ModelError::InvalidCoefficient { coefficient } => write!(
+                f,
+                "[{}] Coefficient must be finite (got {})",
+                self.code(),
+                coefficient
+            ),
         }
     }
 }

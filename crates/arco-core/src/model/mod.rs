@@ -555,6 +555,34 @@ mod tests {
     }
 
     #[test]
+    fn test_set_coefficient_rejects_non_finite() {
+        let mut model = Model::new();
+        let var_id = model
+            .add_variable(Variable {
+                bounds: Bounds::new(0.0, 10.0),
+                is_integer: false,
+                is_active: true,
+            })
+            .unwrap();
+        let constraint_id = model
+            .add_constraint(Constraint {
+                bounds: Bounds::new(0.0, 100.0),
+            })
+            .unwrap();
+
+        assert!(
+            model
+                .set_coefficient(var_id, constraint_id, f64::INFINITY)
+                .is_err()
+        );
+        assert!(
+            model
+                .set_coefficient(var_id, constraint_id, f64::NAN)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn test_set_coefficient_with_invalid_variable_fails() {
         let mut model = Model::new();
         let invalid_var_id = VariableId::new(999);
@@ -790,5 +818,48 @@ mod tests {
             result,
             Err(ModelError::InvalidConstraintBounds { .. })
         ));
+    }
+
+    #[test]
+    fn test_variable_bounds_reject_nan() {
+        let mut model = Model::new();
+        let result = model.add_variable(Variable {
+            bounds: Bounds::new(f64::NAN, 1.0),
+            is_integer: false,
+            is_active: true,
+        });
+        assert!(matches!(
+            result,
+            Err(ModelError::InvalidVariableBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn test_constraint_bounds_reject_nan() {
+        let mut model = Model::new();
+        let result = model.add_constraint(Constraint {
+            bounds: Bounds::new(0.0, f64::NAN),
+        });
+        assert!(matches!(
+            result,
+            Err(ModelError::InvalidConstraintBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn test_set_objective_rejects_non_finite_coefficients() {
+        let mut model = Model::new();
+        let var_id = model
+            .add_variable(Variable {
+                bounds: Bounds::new(0.0, 1.0),
+                is_integer: false,
+                is_active: true,
+            })
+            .unwrap();
+        let result = model.set_objective(Objective {
+            sense: Some(Sense::Minimize),
+            terms: vec![(var_id, f64::INFINITY)],
+        });
+        assert!(result.is_err());
     }
 }

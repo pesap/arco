@@ -10,7 +10,10 @@ use crate::model::{ColumnData, Model};
 impl Model {
     /// Add a variable to the model.
     pub fn add_variable(&mut self, variable: Variable) -> Result<VariableId, ModelError> {
-        if variable.bounds.lower > variable.bounds.upper {
+        if variable.bounds.lower.is_nan()
+            || variable.bounds.upper.is_nan()
+            || variable.bounds.lower > variable.bounds.upper
+        {
             return Err(ModelError::InvalidVariableBounds {
                 lower: variable.bounds.lower,
                 upper: variable.bounds.upper,
@@ -27,7 +30,10 @@ impl Model {
 
     /// Add a constraint to the model.
     pub fn add_constraint(&mut self, constraint: Constraint) -> Result<ConstraintId, ModelError> {
-        if constraint.bounds.lower > constraint.bounds.upper {
+        if constraint.bounds.lower.is_nan()
+            || constraint.bounds.upper.is_nan()
+            || constraint.bounds.lower > constraint.bounds.upper
+        {
             return Err(ModelError::InvalidConstraintBounds {
                 lower: constraint.bounds.lower,
                 upper: constraint.bounds.upper,
@@ -45,8 +51,13 @@ impl Model {
     /// Set the objective function.
     pub fn set_objective(&mut self, objective: Objective) -> Result<(), ModelError> {
         let sense = objective.sense.ok_or(ModelError::NoObjective)?;
-        for (var_id, _) in &objective.terms {
+        for (var_id, coeff) in &objective.terms {
             self.ensure_variable_exists(*var_id)?;
+            if !coeff.is_finite() {
+                return Err(ModelError::InvalidCoefficient {
+                    coefficient: *coeff,
+                });
+            }
         }
 
         let normalized = self.normalize_terms(objective.terms);
@@ -129,6 +140,9 @@ impl Model {
         constraint_id: ConstraintId,
         coefficient: f64,
     ) -> Result<(), ModelError> {
+        if !coefficient.is_finite() {
+            return Err(ModelError::InvalidCoefficient { coefficient });
+        }
         self.ensure_variable_exists(var_id)?;
         self.ensure_constraint_exists(constraint_id)?;
 
