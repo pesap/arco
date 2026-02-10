@@ -1,10 +1,18 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "arco-python-and-crates",
+      "components": ["arco-crates", "arco-python"]
+    }
+  ],
   "packages": {
-    "bindings/python": {
-      "release-type": "python",
-      "package-name": "arco",
-      "include-component-in-tag": false,
+    "crates": {
+      "release-type": "simple",
+      "component": "arco-crates",
+      "skip-github-release": true,
+      "skip-changelog": true,
       "extra-files": [
         {
           "type": "toml",
@@ -12,6 +20,12 @@
           "jsonpath": "$.workspace.package.version"
         }
       ]
+    },
+    "bindings/python": {
+      "release-type": "python",
+      "component": "arco-python",
+      "package-name": "arco",
+      "include-component-in-tag": false
     }
   }
 }
