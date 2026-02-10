@@ -80,6 +80,16 @@ uv add arco
 uv run python -c "import arco; print(arco.__name__)"
 ```
 
+Use `pip` if you prefer a standard Python virtual environment workflow.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install arco
+python -c "import arco; print(arco.__name__)"
+```
+
 ## API comparison
 
 <a id="api-comparison"></a>

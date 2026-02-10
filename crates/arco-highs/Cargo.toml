@@ -1,6 +1,6 @@
 [package]
 name = "arco-highs"
-version = "0.1.0"
+version = { workspace = true }
 description = "Zero-copy bridge from Arco model to HiGHS solver"
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -31,4 +31,4 @@ parallel = ["rayon"]
 all-optimizations = ["async", "parallel"]
 
 [dev-dependencies]
-tracing-subscriber = "0.3"
+tracing-subscriber = { workspace = true }

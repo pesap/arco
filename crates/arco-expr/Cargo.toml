@@ -1,8 +1,12 @@
 [package]
 name = "arco-expr"
 version = { workspace = true }
+description = "Expression primitives and identifier types for Arco"
 edition = { workspace = true }
 rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
 license = { workspace = true }
 publish = false
 

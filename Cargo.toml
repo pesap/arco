@@ -7,6 +7,8 @@ resolver = "3"
 tracing = "0.1"
 serde_json = "1.0"
 sysinfo = "0.33"
+pyo3 = "0.28"
+tracing-subscriber = "0.3"
 arco-core = { path = "crates/arco-core" }
 arco-expr = { path = "crates/arco-expr" }
 arco-solver = { path = "crates/arco-solver" }
@@ -18,7 +20,7 @@ arco-blocks = { path = "crates/arco-blocks" }
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-license = "BSD-3"
+license = "BSD-3-Clause"
 authors = [
     "pesap <pesap@users.noreply.github.com>",
 ]

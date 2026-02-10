@@ -483,6 +483,8 @@ Cargo.lock
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+!/scripts/
+!/scripts/*.py
 pyvenv.cfg
 pip-selfcheck.json
 

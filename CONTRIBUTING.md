@@ -31,6 +31,17 @@ uv run pytest
 If you touch Python bindings or Python test harnesses, keep execution under
 `uv run` so environments and dependency resolution stay reproducible.
 
+## GitHub automation
+
+The repository ships GitHub Actions for package validation and release:
+
+- `CI` runs install/import smoke tests for built wheels across Python 3.10-3.13,
+  validates source-distribution installation, and runs docs doctests.
+- `Release and Publish` runs `release-please` automatically on `main`; when a
+  release is created it builds wheels/sdist, uploads those artifacts to the
+  GitHub Release, and publishes to PyPI.
+- Shared package smoke logic lives in `scripts/python_package_smoke.py`.
+
 ## Testing
 
 Use targeted tests first, then broaden based on risk:
