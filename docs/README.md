@@ -62,3 +62,4 @@ the way it does.
 ## [Reference](reference/)
 
 - [API Reference](reference/) -- type stubs, classes, and method signatures for the full Python API.
+- [Known Problems](reference/known-problems.md) -- canonical markdown catalog of default optimization problems for benchmarks and regression discussions.

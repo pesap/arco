@@ -20,6 +20,7 @@ REPO_ROOT = _find_repo_root(start=Path(__file__).resolve().parent)
 DOCS_DIR = REPO_ROOT / "docs"
 DOCTEST_FENCE_PATTERN = re.compile(r"^```python\s+doctest\b")
 FENCE_END = "```"
+EXCLUDED_DOC_DIRS: set[str] = set()
 
 
 @dataclass(frozen=True, slots=True)
