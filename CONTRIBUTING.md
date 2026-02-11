@@ -40,10 +40,10 @@ The repository ships GitHub Actions for package validation and release:
 - `Release and Publish` runs `release-please` automatically on `main`; when a
   release is created it builds wheels/sdist, uploads those artifacts to the
   GitHub Release, and publishes to PyPI.
-- Release PRs are component-based (`arco-crates` and `arco-python`) and kept in
-  version sync via linked versions.
-- `arco-python` publishes artifacts and releases; `arco-crates` is internal and
-  remains release-tracked for visibility/version coordination.
+- Releases follow one platform version stream (`arco`) that updates workspace
+  and Python package versions together.
+- `arco-python` publishes artifacts and releases; Rust crates are internal and
+  versioned as part of the same platform release.
 - Shared package smoke logic lives in `scripts/python_package_smoke.py`.
 - For policy and operator guidance, use [`RELEASE_POLICY.md`](RELEASE_POLICY.md)
   as the source of truth.
