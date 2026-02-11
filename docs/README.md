@@ -5,6 +5,7 @@ constrained hardware. It ships as a Python package backed by a Rust core, with
 the HiGHS solver embedded so there is nothing extra to install. If your problem
 fits in memory, arco will solve it; the library is designed to be direct about
 resource limits rather than silently degrading.
+The name stands for **Assembled Resource-Constrained Optimization**.
 
 ## Quickstart
 

@@ -22,6 +22,9 @@ Arco is an experimental framework that serves a narrow set of linear and
 mixed-integer optimization. The primary user-facing API is the Python binding
 module `arco`, backed by Rust crates for model construction, solver integration,
 and diagnostics.
+The name stands for **Assembled Resource-Constrained Optimization** to reflect
+both the memory-focused design and the API ideas assembled from multiple
+optimization ecosystems.
 
 ## Philosophy
 
