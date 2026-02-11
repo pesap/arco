@@ -35,20 +35,18 @@ If you touch Python bindings or Python test harnesses, keep execution under
 
 The repository ships GitHub Actions for package validation and release:
 
-- `CI` runs install/import smoke tests for built wheels across Python 3.10-3.13,
+- `CI` runs install/import smoke tests for built wheels across Python 3.10-3.14,
   validates source-distribution installation, and runs docs doctests.
 - `Release and Publish` runs `release-please` automatically on `main`; when a
   release is created it builds wheels/sdist, uploads those artifacts to the
   GitHub Release, and publishes to PyPI.
-- Release notes are generated in GitHub-style format via `release-please`
-  (`changelog-type: github`).
-- Commits that touch `crates/**` now participate in release bump detection and
-  are linked to `bindings/python`, so crate-side `feat:`/`fix:` changes also
-  advance the published Python package version.
-- Release tags are component-based (`arco-python-vX.Y.Z` for Python); the
-  crates component stays internal (`skip-github-release`) and is used to drive
-  linked version bumps.
+- Release PRs are component-based (`arco-crates` and `arco-python`) and kept in
+  version sync via linked versions.
+- `arco-python` publishes artifacts and releases; `arco-crates` is internal and
+  remains release-tracked for visibility/version coordination.
 - Shared package smoke logic lives in `scripts/python_package_smoke.py`.
+- For policy and operator guidance, use [`RELEASE_POLICY.md`](RELEASE_POLICY.md)
+  as the source of truth.
 
 ## Testing
 

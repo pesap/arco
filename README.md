@@ -207,3 +207,4 @@ By default, `run` writes newline-delimited JSON records to
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
 development workflow, testing expectations, and documentation requirements.
+Release/versioning behavior is defined in [`RELEASE_POLICY.md`](RELEASE_POLICY.md).
