@@ -1,41 +1,23 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "changelog-type": "github",
-  "group-pull-request-title-pattern": "chore${scope}: release${component} v${version}",
-  "plugins": [
-    {
-      "type": "linked-versions",
-      "groupName": "arco-python-and-crates",
-      "components": ["arco", "arco-crates", "arco-python"]
-    }
-  ],
+  "pull-request-title-pattern": "chore${scope}: release${component} v${version}",
   "packages": {
     ".": {
       "release-type": "simple",
       "component": "arco",
       "include-component-in-tag": true,
-      "skip-github-release": true,
-      "skip-changelog": true
-    },
-    "crates": {
-      "release-type": "simple",
-      "component": "arco-crates",
-      "skip-github-release": true,
-      "skip-changelog": true,
       "extra-files": [
         {
           "type": "toml",
           "path": "/Cargo.toml",
           "jsonpath": "$.workspace.package.version"
-        }
-      ]
-    },
-    "bindings/python": {
-      "release-type": "python",
-      "component": "arco-python",
-      "package-name": "arco",
-      "include-component-in-tag": true,
-      "extra-files": [
+        },
+        {
+          "type": "toml",
+          "path": "bindings/python/pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
         {
           "type": "toml",
           "path": "uv.lock",
