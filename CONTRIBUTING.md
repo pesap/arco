@@ -40,9 +40,14 @@ The repository ships GitHub Actions for package validation and release:
 - `Release and Publish` runs `release-please` automatically on `main`; when a
   release is created it builds wheels/sdist, uploads those artifacts to the
   GitHub Release, and publishes to PyPI.
+- Release notes are generated in GitHub-style format via `release-please`
+  (`changelog-type: github`).
 - Commits that touch `crates/**` now participate in release bump detection and
   are linked to `bindings/python`, so crate-side `feat:`/`fix:` changes also
   advance the published Python package version.
+- Release tags are component-based (`arco-python-vX.Y.Z` for Python); the
+  crates component stays internal (`skip-github-release`) and is used to drive
+  linked version bumps.
 - Shared package smoke logic lives in `scripts/python_package_smoke.py`.
 
 ## Testing
