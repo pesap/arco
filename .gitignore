@@ -561,3 +561,6 @@ $RECYCLE.BIN/
 package*
 
 # End of https://www.toptal.com/developers/gitignore/api/c,vim,data,rust,venv,julia,linux,macos,python,windows,database,virtualenv,visualstudiocode,node
+
+# Generated during packaging from root licenses/
+bindings/python/licenses/

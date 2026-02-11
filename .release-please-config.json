@@ -27,7 +27,14 @@
       "release-type": "python",
       "component": "arco-python",
       "package-name": "arco",
-      "include-component-in-tag": true
+      "include-component-in-tag": true,
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name=='arco')].version"
+        }
+      ]
     }
   }
 }

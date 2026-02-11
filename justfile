@@ -81,15 +81,20 @@ py-type:
     uv run ty check src/
 
 [group("python")]
+[doc("Copy root licenses into bindings/python for packaging")]
+py-licenses:
+    uv run python scripts/sync_python_licenses.py
+
+[group("python")]
 [doc("Build the Python extension in-place (dev mode)")]
 [working-directory: "bindings/python"]
-py-dev:
+py-dev: py-licenses
     {{ maturin }} develop
 
 [group("python")]
 [doc("Build a release wheel")]
 [working-directory: "bindings/python"]
-py-build:
+py-build: py-licenses
     {{ maturin }} build --release
 
 [group("python")]

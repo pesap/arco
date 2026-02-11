@@ -63,6 +63,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
 
+      - name: Sync Python license files
+        run: python scripts/sync_python_licenses.py
+
       - name: Build wheel
         run:
           uv run --with maturin maturin build --release --manifest-path
@@ -103,6 +106,9 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+
+      - name: Sync Python license files
+        run: python scripts/sync_python_licenses.py
 
       - name: Build source distribution
         run:

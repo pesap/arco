@@ -20,13 +20,13 @@ arco-blocks = { path = "crates/arco-blocks" }
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-license = "BSD-3-Clause"
+license-file = "licenses/BSD-3-Clause.txt"
 authors = [
     "pesap <pesap@users.noreply.github.com>",
 ]
 description = "Workspace for the Arco multi-language bindings"
-homepage = "https://github.com/NatLabRockies/arco"
-repository = "https://github.com/NatLabRockies/arco"
+homepage = "https://github.com/pesap/arco"
+repository = "https://github.com/pesap/arco"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

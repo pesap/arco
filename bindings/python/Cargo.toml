@@ -7,7 +7,7 @@ rust-version = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
+license-file = "licenses/BSD-3-Clause.txt"
 publish = false
 
 [lib]
