@@ -34,7 +34,8 @@
     {
       "type": "linked-versions",
       "groupName": "arco-python-and-crates",
-      "components": ["arco-crates", "arco-python"]
+      "components": ["arco-crates", "arco-python"],
+      "merge": false
     }
   ]
 }
